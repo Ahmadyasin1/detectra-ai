@@ -48,10 +48,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setSession(session);
         setUser(session?.user ?? null);
+        // Do not block the app while profile loads
+        setLoading(false);
         if (session?.user) {
           fetchUserProfile(session.user.id);
-        } else {
-          setLoading(false);
         }
       })
       .catch((error) => {
@@ -460,4 +460,5 @@ export function useAuth() {
   }
   return context;
 }
+
 
