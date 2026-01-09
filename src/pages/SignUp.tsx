@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mail, Lock, User, UserPlus, AlertCircle, CheckCircle, Eye, EyeOff, Check } from 'lucide-react';
@@ -43,6 +43,13 @@ export default function SignUp() {
   const location = useLocation();
 
   const from = (location.state as any)?.from?.pathname || '/demo';
+
+  // Save redirect path for OAuth
+  useEffect(() => {
+    if (from && from !== '/signup') {
+      sessionStorage.setItem('oauth_redirect_path', from);
+    }
+  }, [from]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

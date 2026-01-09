@@ -74,12 +74,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(session?.user ?? null);
           if (session?.user) {
             await fetchUserProfile(session.user.id);
+            
+            // Handle OAuth redirect after successful sign-in
+            if (event === 'SIGNED_IN') {
+              const savedPath = sessionStorage.getItem('oauth_redirect_path');
+              if (savedPath) {
+                sessionStorage.removeItem('oauth_redirect_path');
+                // Use setTimeout to ensure state is updated before navigation
+                setTimeout(() => {
+                  window.location.href = savedPath;
+                }, 100);
+              }
+            }
           }
         } else if (event === 'SIGNED_OUT') {
           setSession(null);
           setUser(null);
           setProfile(null);
           setLoading(false);
+          // Clear OAuth redirect path on sign out
+          sessionStorage.removeItem('oauth_redirect_path');
         } else {
           // Handle other events (SIGNED_UP, USER_UPDATED, etc.)
           setSession(session);
@@ -308,14 +322,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithProvider = async (provider: 'google' | 'github' | 'facebook' | 'twitter') => {
     try {
       // Get the current path to redirect back after OAuth
-      const redirectPath = window.location.pathname === '/signin' || window.location.pathname === '/signup' 
-        ? '/demo' 
-        : window.location.pathname;
+      // Use the saved location state or default to /demo
+      const savedPath = sessionStorage.getItem('oauth_redirect_path');
+      const redirectPath = savedPath || 
+        (window.location.pathname === '/signin' || window.location.pathname === '/signup' 
+          ? '/demo' 
+          : window.location.pathname);
+
+      // Build the redirect URL - ensure it works in both dev and production
+      const redirectUrl = `${window.location.origin}${redirectPath}`;
+      
+      // Store the redirect path for use after OAuth callback
+      if (!savedPath) {
+        sessionStorage.setItem('oauth_redirect_path', redirectPath);
+      }
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}${redirectPath}`,
+          redirectTo: redirectUrl,
           queryParams: provider === 'google' ? {
             access_type: 'offline',
             prompt: 'consent',
@@ -325,7 +350,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error('OAuth error:', error);
-        return { error };
+        sessionStorage.removeItem('oauth_redirect_path');
+        
+        // Provide user-friendly error messages
+        let userMessage = error.message;
+        if (error.message?.includes('popup_closed_by_user')) {
+          userMessage = 'Sign-in was cancelled. Please try again.';
+        } else if (error.message?.includes('OAuth provider not enabled')) {
+          userMessage = `${provider.charAt(0).toUpperCase() + provider.slice(1)} sign-in is not configured. Please contact support.`;
+        } else if (error.message?.includes('redirect_uri_mismatch')) {
+          userMessage = 'OAuth configuration error. Please contact support.';
+        }
+        
+        return { 
+          error: { 
+            ...error,
+            message: userMessage
+          } 
+        };
       }
 
       // OAuth redirects away, so we don't need to handle success here
@@ -334,10 +376,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: null };
     } catch (err: any) {
       console.error('Social auth error:', err);
+      sessionStorage.removeItem('oauth_redirect_path');
       return { 
         error: { 
           message: err.message || `Failed to sign in with ${provider}. Please try again.` 
-        }
+        } 
       };
     }
   };
