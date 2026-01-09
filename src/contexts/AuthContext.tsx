@@ -12,16 +12,24 @@ interface UserProfile {
   updated_at: string;
 }
 
+interface AuthError {
+  message: string;
+}
+
+interface AuthResponse {
+  error: AuthError | null;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signInWithProvider: (provider: 'google' | 'github' | 'facebook' | 'twitter') => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<AuthResponse>;
+  signIn: (email: string, password: string) => Promise<AuthResponse>;
+  signInWithProvider: (provider: 'google' | 'github' | 'facebook' | 'twitter') => Promise<AuthResponse>;
   signOut: () => Promise<void>;
-  updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: any }>;
+  updateProfile: (updates: Partial<UserProfile>) => Promise<AuthResponse>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -72,6 +80,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setSession(session);
           setUser(session?.user ?? null);
+          // App should be interactive even if profile is still fetching
+          setLoading(false);
           if (session?.user) {
             await fetchUserProfile(session.user.id);
             
@@ -113,11 +123,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Handle other events (SIGNED_UP, USER_UPDATED, etc.)
           setSession(session);
           setUser(session?.user ?? null);
+          // Do not block the app while profile loads
+          setLoading(false);
           if (session?.user) {
             await fetchUserProfile(session.user.id);
           } else {
             setProfile(null);
-            setLoading(false);
           }
         }
       } catch (error) {
@@ -460,5 +471,4 @@ export function useAuth() {
   }
   return context;
 }
-
 
