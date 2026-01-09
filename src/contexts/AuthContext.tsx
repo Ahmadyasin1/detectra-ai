@@ -78,12 +78,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Handle OAuth redirect after successful sign-in
             if (event === 'SIGNED_IN') {
               const savedPath = sessionStorage.getItem('oauth_redirect_path');
+              const savedOrigin = sessionStorage.getItem('oauth_origin');
+              
               if (savedPath) {
                 sessionStorage.removeItem('oauth_redirect_path');
-                // Use setTimeout to ensure state is updated before navigation
-                setTimeout(() => {
-                  window.location.href = savedPath;
-                }, 100);
+                sessionStorage.removeItem('oauth_origin');
+                
+                // Build the full URL - use saved origin if available, otherwise current origin
+                const redirectUrl = savedOrigin 
+                  ? `${savedOrigin}${savedPath}`
+                  : `${window.location.origin}${savedPath}`;
+                
+                // Safety check: Never redirect to localhost in production
+                if (window.location.hostname !== 'localhost' && redirectUrl.includes('localhost')) {
+                  // Use current origin instead
+                  window.location.href = `${window.location.origin}${savedPath}`;
+                } else {
+                  // Use setTimeout to ensure state is updated before navigation
+                  setTimeout(() => {
+                    window.location.href = redirectUrl;
+                  }, 100);
+                }
               }
             }
           }
@@ -330,12 +345,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : window.location.pathname);
 
       // Build the redirect URL - ensure it works in both dev and production
-      const redirectUrl = `${window.location.origin}${redirectPath}`;
+      // Never use localhost in production - always use the actual origin
+      let redirectUrl = `${window.location.origin}${redirectPath}`;
+      
+      // Safety check: If we're in production (not localhost), ensure we're not using localhost
+      if (window.location.hostname !== 'localhost' && redirectUrl.includes('localhost')) {
+        redirectUrl = `${window.location.origin}${redirectPath}`;
+      }
       
       // Store the redirect path for use after OAuth callback
       if (!savedPath) {
         sessionStorage.setItem('oauth_redirect_path', redirectPath);
       }
+      
+      // Also store the full origin to prevent localhost issues
+      sessionStorage.setItem('oauth_origin', window.location.origin);
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider,

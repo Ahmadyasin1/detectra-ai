@@ -138,5 +138,5 @@
 - User profiles are automatically created on sign-up
 - Sessions persist across page refreshes
 - Protected routes automatically redirect to sign-in
-- Sign-in redirects to the originally requested page
+- Sign-in redirects to the ori                           gginally requested page
 
