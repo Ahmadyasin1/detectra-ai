@@ -1,84 +1,136 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { Component, ReactNode, ErrorInfo } from 'react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
+  fallback?: ReactNode;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
+  resetKeys?: unknown[];
 }
 
 interface State {
   hasError: boolean;
-  error?: Error;
-  errorInfo?: ErrorInfo;
+  error: Error | null;
+  errorInfo: ErrorInfo | null;
 }
 
-export default class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false,
-  };
+// Feature flag check for enhanced error recovery
+const ENHANCED_ERROR_RECOVERY = import.meta.env.VITE_ENHANCED_ERROR_RECOVERY === 'true';
 
-  public static getDerivedStateFromError(error: Error): State {
+export class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    this.setState({ errorInfo });
+    
+    // Log error for diagnostics
     console.error('ErrorBoundary caught an error:', error, errorInfo);
-    this.setState({ error, errorInfo });
+    
+    // Call optional error handler
+    if (this.props.onError) {
+      this.props.onError(error, errorInfo);
+    }
+
+    // Report to error tracking service if available
+    if (ENHANCED_ERROR_RECOVERY && typeof window !== 'undefined') {
+      this.reportError(error, errorInfo);
+    }
   }
 
-  private handleReload = () => {
-    window.location.reload();
+  componentDidUpdate(prevProps: Props) {
+    // Reset error state if resetKeys change
+    if (
+      this.state.hasError && 
+      this.props.resetKeys && 
+      JSON.stringify(prevProps.resetKeys) !== JSON.stringify(this.props.resetKeys)
+    ) {
+      this.reset();
+    }
+  }
+
+  reportError(error: Error, errorInfo: ErrorInfo) {
+    try {
+      const errorData = {
+        message: error.message,
+        stack: error.stack,
+        componentStack: errorInfo.componentStack,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+      };
+      
+      // Store in localStorage for recovery
+      const errors = JSON.parse(localStorage.getItem('detecra-errors') || '[]');
+      errors.push(errorData);
+      localStorage.setItem('detecra-errors', JSON.stringify(errors.slice(-10))); // Keep last 10
+      
+      // Don't send in production to avoid exposing details
+      if (import.meta.env.DEV) {
+        console.log('Error report:', errorData);
+      }
+    } catch {
+      // Silent fail - error reporting should not break the app
+    }
+  }
+
+  reset = () => {
+    this.setState({ hasError: false, error: null, errorInfo: null });
   };
 
-  private handleGoHome = () => {
-    window.location.href = '/';
-  };
-
-  public render() {
+  render() {
     if (this.state.hasError) {
+      // Use custom fallback if provided
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      // Default graceful degradation UI
       return (
-        <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
-          <div className="max-w-md w-full text-center">
-            <div className="w-20 h-20 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-              <AlertTriangle className="w-10 h-10 text-white" />
+        <div className="min-h-screen flex items-center justify-center p-4 bg-gray-950">
+          <div className="max-w-md w-full card-glass rounded-2xl p-8 text-center border border-white/10">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-red-500/10 flex items-center justify-center mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-400" />
             </div>
-            
-            <h1 className="text-2xl font-bold text-white mb-4">
-              Oops! Something went wrong
-            </h1>
-            
-            <p className="text-gray-300 mb-8">
-              We're sorry, but something unexpected happened. Please try refreshing the page or contact support if the problem persists.
+            <h2 className="text-xl font-bold text-white mb-2">Something went wrong</h2>
+            <p className="text-gray-400 text-sm mb-6">
+              We encountered an unexpected error. The application will continue to function,
+              but some features may be unavailable.
             </p>
             
-            <div className="space-y-3">
-              <button
-                onClick={this.handleReload}
-                className="w-full px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-cyan-500/50 transition-all flex items-center justify-center gap-2"
-              >
-                <RefreshCw className="w-5 h-5" />
-                Refresh Page
-              </button>
-              
-              <button
-                onClick={this.handleGoHome}
-                className="w-full px-6 py-3 bg-transparent border-2 border-cyan-500 text-cyan-400 rounded-xl font-semibold hover:bg-cyan-500/10 transition-all flex items-center justify-center gap-2"
-              >
-                <Home className="w-5 h-5" />
-                Go to Home
-              </button>
-            </div>
-            
-            {process.env.NODE_ENV === 'development' && this.state.error && (
-              <details className="mt-8 text-left">
-                <summary className="text-gray-400 cursor-pointer mb-2">
-                  Error Details (Development)
-                </summary>
-                <pre className="text-xs text-gray-500 bg-gray-800 p-4 rounded-lg overflow-auto">
-                  {this.state.error.toString()}
-                  {this.state.errorInfo?.componentStack}
-                </pre>
+            {this.state.error && import.meta.env.DEV && (
+              <details className="text-left bg-black/30 rounded-xl p-4 mb-6 text-xs text-red-400">
+                <summary className="cursor-pointer mb-2">Error Details</summary>
+                <p className="break-all">{this.state.error.message}</p>
+                <pre className="mt-2 whitespace-pre-wrap">{this.state.error.stack}</pre>
               </details>
             )}
+
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={this.reset}
+                className="flex items-center gap-2 px-4 py-2 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-xl text-sm hover:bg-cyan-500/20 transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Try Again
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-white/10 text-gray-300 border border-white/20 rounded-xl text-sm hover:bg-white/20 transition-colors"
+              >
+                Reload Page
+              </button>
+            </div>
+
+            <p className="text-gray-600 text-xs mt-6">
+              Error ID: {Date.now().toString(36)}
+            </p>
           </div>
         </div>
       );

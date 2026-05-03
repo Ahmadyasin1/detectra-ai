@@ -194,7 +194,7 @@ export default function BusinessCase() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={isInView ? { opacity: 1, y: 0 } : {}}
                     transition={{ duration: 0.5, delay: 0.6 + index * 0.1 }}
-                    className="p-6 bg-gray-800/50 rounded-xl border border-cyan-500/20"
+                    className="p-6 bg-white/10 rounded-xl border border-cyan-500/20"
                   >
                     <div className="flex justify-between items-start mb-3">
                       <h4 className="text-white font-semibold">{market.industry}</h4>
@@ -237,7 +237,7 @@ export default function BusinessCase() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={isInView ? { opacity: 1, y: 0 } : {}}
                     transition={{ duration: 0.5, delay: 0.8 + index * 0.1 }}
-                    className="flex items-start gap-4 p-4 bg-gray-800/50 rounded-xl border border-cyan-500/20"
+                    className="flex items-start gap-4 p-4 bg-white/10 rounded-xl border border-cyan-500/20"
                   >
                     <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
                       <advantage.icon className="w-6 h-6 text-white" />
@@ -274,7 +274,7 @@ export default function BusinessCase() {
                     initial={{ opacity: 0, x: -20 }}
                     animate={isInView ? { opacity: 1, x: 0 } : {}}
                     transition={{ duration: 0.5, delay: 1.0 + index * 0.1 }}
-                    className="p-6 bg-gray-800/50 rounded-xl border border-cyan-500/20"
+                    className="p-6 bg-white/10 rounded-xl border border-cyan-500/20"
                   >
                     <div className="flex justify-between items-start mb-4">
                       <h4 className="text-white font-semibold text-lg">{tier.tier}</h4>
@@ -315,7 +315,7 @@ export default function BusinessCase() {
                     initial={{ opacity: 0, x: 20 }}
                     animate={isInView ? { opacity: 1, x: 0 } : {}}
                     transition={{ duration: 0.5, delay: 1.2 + index * 0.1 }}
-                    className="flex justify-between items-center p-4 bg-gray-800/50 rounded-xl border border-cyan-500/20"
+                    className="flex justify-between items-center p-4 bg-white/10 rounded-xl border border-cyan-500/20"
                   >
                     <span className="text-white font-semibold">{projection.year}</span>
                     <div className="flex gap-8">

@@ -1,13 +1,11 @@
 import { motion } from 'framer-motion';
 import { useInView } from 'framer-motion';
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { ArrowRight, User, Factory, Activity } from 'lucide-react';
 
 export default function Projects() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: '-100px' });
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-
   const projects = [
     {
       icon: User,
@@ -33,7 +31,7 @@ export default function Projects() {
   ];
 
   return (
-    <section id="projects" className="py-20 sm:py-32 bg-gray-900 relative overflow-hidden">
+    <section id="projects" className="py-20 sm:py-32 bg-white/5 backdrop-blur-md relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_50%,_var(--tw-gradient-stops))] from-cyan-500/5 via-transparent to-transparent" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10" ref={ref}>
@@ -59,8 +57,6 @@ export default function Projects() {
               initial={{ opacity: 0, y: 30 }}
               animate={isInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.8, delay: index * 0.2 }}
-              onHoverStart={() => setHoveredIndex(index)}
-              onHoverEnd={() => setHoveredIndex(null)}
               className="group"
             >
               <motion.div

@@ -207,7 +207,7 @@ export default function ProjectTimeline() {
                       initial={{ opacity: 0, y: 20 }}
                       animate={isInView ? { opacity: 1, y: 0 } : {}}
                       transition={{ duration: 0.5, delay: 0.6 + index * 0.1 }}
-                      className="flex items-center gap-4 p-4 bg-gray-800/50 rounded-xl border border-cyan-500/20"
+                      className="flex items-center gap-4 p-4 bg-white/10 rounded-xl border border-cyan-500/20"
                     >
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
                         milestone.status === 'completed' 
@@ -243,19 +243,19 @@ export default function ProjectTimeline() {
                 <h3 className="text-2xl font-bold text-white mb-6">Project Statistics</h3>
                 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-4 bg-gray-800/50 rounded-xl border border-cyan-500/20">
+                  <div className="text-center p-4 bg-white/10 rounded-xl border border-cyan-500/20">
                     <div className="text-3xl font-bold text-cyan-400 mb-2">12</div>
                     <div className="text-gray-300 text-sm">Months Duration</div>
                   </div>
-                  <div className="text-center p-4 bg-gray-800/50 rounded-xl border border-cyan-500/20">
+                  <div className="text-center p-4 bg-white/10 rounded-xl border border-cyan-500/20">
                     <div className="text-3xl font-bold text-cyan-400 mb-2">4</div>
                     <div className="text-gray-300 text-sm">Major Phases</div>
                   </div>
-                  <div className="text-center p-4 bg-gray-800/50 rounded-xl border border-cyan-500/20">
+                  <div className="text-center p-4 bg-white/10 rounded-xl border border-cyan-500/20">
                     <div className="text-3xl font-bold text-cyan-400 mb-2">15</div>
                     <div className="text-gray-300 text-sm">Key Tasks</div>
                   </div>
-                  <div className="text-center p-4 bg-gray-800/50 rounded-xl border border-cyan-500/20">
+                  <div className="text-center p-4 bg-white/10 rounded-xl border border-cyan-500/20">
                     <div className="text-3xl font-bold text-cyan-400 mb-2">90%</div>
                     <div className="text-gray-300 text-sm">Phase 1 Complete</div>
                   </div>

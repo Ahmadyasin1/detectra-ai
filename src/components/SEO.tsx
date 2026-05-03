@@ -10,7 +10,7 @@ interface SEOProps {
 
 export default function SEO({
   title = 'Detecra AI - Empowering the World with Intelligent Detection',
-  description = 'Advanced AI detection systems powered by Nexariza AI. Guided by Dr. Usman Aamer, Director of FOIT at University of Central Punjab. Transforming industries with cutting-edge artificial intelligence.',
+  description = 'Advanced AI detection systems powered by Nexariza AI. Supervision: Phases 1-2 by Dr. Usman Aamer and Phases 3-4 by Dr. Yasin Nasir at University of Central Punjab. Transforming industries with cutting-edge artificial intelligence.',
   keywords = [
     'AI detection',
     'artificial intelligence',
@@ -21,6 +21,7 @@ export default function SEO({
     'University of Central Punjab',
     'FOIT',
     'Dr. Usman Aamer',
+    'Dr. Yasin Nasir',
     'face detection',
     'industrial automation',
     'medical imaging',
@@ -84,15 +85,27 @@ export default function SEO({
             "@type": "Person",
             "name": "Ahmad Yasin"
           },
-          "supervisor": {
-            "@type": "Person",
-            "name": "Dr. Usman Aamer",
-            "jobTitle": "Director of FOIT",
-            "worksFor": {
-              "@type": "Organization",
-              "name": "University of Central Punjab"
+          "mentor": [
+            {
+              "@type": "Person",
+              "name": "Dr. Usman Aamer",
+              "jobTitle": "Director of FOIT",
+              "description": "Supervisor for Phases 1-2",
+              "worksFor": {
+                "@type": "Organization",
+                "name": "University of Central Punjab"
+              }
+            },
+            {
+              "@type": "Person",
+              "name": "Dr. Yasin Nasir",
+              "description": "Supervisor for Phases 3-4",
+              "worksFor": {
+                "@type": "Organization",
+                "name": "University of Central Punjab"
+              }
             }
-          },
+          ],
           "sameAs": [
             "https://linkedin.com/company/detecra-ai",
             "https://github.com/detecra-ai",

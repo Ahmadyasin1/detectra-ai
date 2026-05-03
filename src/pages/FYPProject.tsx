@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useInView } from 'framer-motion';
 import { useRef } from 'react';
-import { Brain, Target, Award, Users, Clock, BookOpen, Eye, Zap, Shield, BarChart3, CheckCircle } from 'lucide-react';
+import { Brain, Target, Award, Users, Clock, Eye, Zap, Shield, CheckCircle } from 'lucide-react';
 
 export default function FYPProject() {
   const ref = useRef(null);
@@ -23,7 +23,7 @@ export default function FYPProject() {
     {
       icon: Award,
       title: 'Supervisor',
-      content: 'Dr. Usman Aamer, Director of FOIT, University of Central Punjab',
+      content: 'Phases 1-2: Dr. Usman Aamer (Director FOIT, UCP) · Phases 3-4: Dr. Yasin Nasir (UCP)',
       color: 'from-violet-600 to-cyan-500',
     },
     {
@@ -62,8 +62,8 @@ export default function FYPProject() {
       category: 'Performance',
       requirements: [
         'Achieve ≥85% accuracy across all detection and fusion modules on validation datasets',
-        'System should process a 1-minute HD video within ≤60 seconds on an RTX 3060 or equivalent GPU',
-        'Support GPU acceleration for fast processing and large-scale datasets'
+        'Process a 1-minute HD video within ≤15 minutes on CPU-only hardware (no GPU required)',
+        'CPU-optimised inference via INT8-quantised ONNX models for accessible deployment'
       ]
     },
     {
@@ -95,36 +95,36 @@ export default function FYPProject() {
   const modules = [
     {
       icon: Eye,
-      title: 'Object Detection & Logo Recognition',
-      description: 'Advanced CNN-based models for real-time object detection and custom logo recognition',
-      technologies: ['YOLO', 'DETR', 'OpenCV', 'Custom Logo Dataset'],
+      title: 'Object & Person Detection',
+      description: 'YOLOv8s-seg detects 80+ COCO object classes with segmentation masks. ByteTrack assigns persistent IDs to track every individual across frames.',
+      technologies: ['YOLOv8s-seg', 'ByteTrack', 'OpenCV', 'COCO-80'],
       color: 'from-blue-500 to-cyan-500',
     },
     {
       icon: Brain,
-      title: 'Motion/Action Recognition',
-      description: 'Deep learning models for human activity and motion pattern recognition',
-      technologies: ['3D CNN', 'LSTM', 'Transformer', 'Kinetics Dataset'],
+      title: 'Pose & Action Recognition',
+      description: 'YOLOv8n-pose extracts 17-keypoint skeletons per person. An ActionBuffer classifies activities over sliding temporal windows using VideoMAE.',
+      technologies: ['YOLOv8n-pose', 'VideoMAE', 'ActionBuffer', 'UCF-101'],
       color: 'from-cyan-500 to-green-500',
     },
     {
       icon: Zap,
       title: 'Audio Analysis',
-      description: 'Speech-to-text and environmental sound classification using state-of-the-art models',
-      technologies: ['Whisper', 'wav2vec 2.0', 'AudioSet', 'Librosa'],
+      description: 'Whisper-small transcribes speech with timestamps and language detection. YAMNet + Librosa MFCC classifies 521 environmental sound categories.',
+      technologies: ['Whisper-small', 'YAMNet', 'Librosa MFCC', 'AudioSet'],
       color: 'from-green-500 to-yellow-500',
     },
     {
       icon: Target,
-      title: 'Multimodal Fusion Engine',
-      description: 'Transformer-based fusion engine for contextual alignment of all modalities',
-      technologies: ['Transformer', 'Cross-Modal Attention', 'Temporal Alignment', 'PyTorch'],
+      title: 'Cross-Modal Fusion Engine',
+      description: 'A custom Cross-Modal Transformer attends over visual and audio feature streams simultaneously to resolve context that single-modality models miss.',
+      technologies: ['Cross-Modal Transformer', 'Multi-Head Attention', 'Temporal Alignment', 'PyTorch'],
       color: 'from-yellow-500 to-orange-500',
     },
   ];
 
   return (
-    <div className="pt-20">
+    <div className="pt-24 min-h-screen">
       {/* Hero Section */}
       <section className="py-20 sm:py-32 bg-gradient-to-b from-gray-950 to-gray-900 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_var(--tw-gradient-stops))] from-cyan-500/5 via-transparent to-transparent" />
@@ -173,7 +173,7 @@ export default function FYPProject() {
       </section>
 
       {/* Abstract Section */}
-      <section className="py-20 sm:py-32 bg-gray-900 relative overflow-hidden">
+      <section className="py-20 sm:py-32 bg-white/5 backdrop-blur-md relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -236,7 +236,7 @@ export default function FYPProject() {
                   initial={{ opacity: 0, x: -30 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5, delay: index * 0.1 }}
-                  className="flex items-start gap-4 p-6 bg-gray-800/50 rounded-xl border border-cyan-500/20 hover:border-cyan-500/50 transition-all"
+                  className="flex items-start gap-4 p-6 bg-white/10 rounded-xl border border-cyan-500/20 hover:border-cyan-500/50 transition-all"
                 >
                   <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
                     <span className="text-white text-sm font-bold">{index + 1}</span>
@@ -250,7 +250,7 @@ export default function FYPProject() {
       </section>
 
       {/* Completeness Criteria Section */}
-      <section ref={ref} className="py-20 sm:py-32 bg-gray-900 relative overflow-hidden">
+      <section ref={ref} className="py-20 sm:py-32 bg-white/5 backdrop-blur-md relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -287,7 +287,7 @@ export default function FYPProject() {
                           initial={{ opacity: 0, x: -30 }}
                           animate={isInView ? { opacity: 1, x: 0 } : {}}
                           transition={{ duration: 0.5, delay: index * 0.1 }}
-                          className="border-b border-gray-700/50 hover:bg-cyan-500/5 transition-colors"
+                          className="border-b border-white/20/50 hover:bg-cyan-500/5 transition-colors"
                         >
                           <td className="px-6 py-4 text-white font-semibold">{index + 1}</td>
                           <td className="px-6 py-4 text-gray-300">{item.criteria}</td>
@@ -350,7 +350,7 @@ export default function FYPProject() {
       </section>
 
       {/* Non-Functional Requirements Section */}
-      <section className="py-20 sm:py-32 bg-gray-900 relative overflow-hidden">
+      <section className="py-20 sm:py-32 bg-white/5 backdrop-blur-md relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 30 }}

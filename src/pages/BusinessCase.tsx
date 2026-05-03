@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useInView } from 'framer-motion';
 import { useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { TrendingUp, DollarSign, Users, Shield, Zap, Target, BarChart3, Globe } from 'lucide-react';
 
 export default function BusinessCase() {
@@ -97,7 +98,7 @@ export default function BusinessCase() {
   ];
 
   return (
-    <div className="pt-20">
+    <div className="pt-24 min-h-screen">
       {/* Hero Section */}
       <section className="py-20 sm:py-32 bg-gradient-to-b from-gray-950 to-gray-900 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_var(--tw-gradient-stops))] from-cyan-500/5 via-transparent to-transparent" />
@@ -150,7 +151,7 @@ export default function BusinessCase() {
       </section>
 
       {/* Target Markets Section */}
-      <section className="py-20 sm:py-32 bg-gray-900 relative overflow-hidden">
+      <section className="py-20 sm:py-32 bg-white/5 backdrop-blur-md relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -273,23 +274,25 @@ export default function BusinessCase() {
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-              <motion.a
-                href="/contact"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-8 py-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-full font-semibold text-lg hover:shadow-2xl hover:shadow-cyan-500/50 transition-all"
-              >
-                Get in Touch
-              </motion.a>
-              
-              <motion.a
-                href="/project"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-8 py-4 bg-transparent border-2 border-cyan-500 text-cyan-400 rounded-full font-semibold text-lg hover:bg-cyan-500/10 hover:shadow-xl hover:shadow-cyan-500/30 transition-all"
-              >
-                Learn More
-              </motion.a>
+              <Link to="/contact">
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-8 py-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-full font-semibold text-lg hover:shadow-2xl hover:shadow-cyan-500/50 transition-all cursor-pointer"
+                >
+                  Get in Touch
+                </motion.div>
+              </Link>
+
+              <Link to="/fyp-project">
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-8 py-4 bg-transparent border-2 border-cyan-500 text-cyan-400 rounded-full font-semibold text-lg hover:bg-cyan-500/10 hover:shadow-xl hover:shadow-cyan-500/30 transition-all cursor-pointer"
+                >
+                  Learn More
+                </motion.div>
+              </Link>
             </div>
           </motion.div>
         </div>

@@ -52,7 +52,7 @@ export default function Testimonials() {
   };
 
   return (
-    <section className="py-20 sm:py-32 bg-gray-900 relative overflow-hidden">
+    <section className="py-20 sm:py-32 bg-white/5 backdrop-blur-md relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,_var(--tw-gradient-stops))] from-violet-500/10 via-transparent to-transparent" />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10" ref={ref}>
@@ -62,11 +62,7 @@ export default function Testimonials() {
           transition={{ duration: 0.8 }}
           className="text-center mb-16"
         >
-          <style jsx>{`
-            .star {
-              filter: drop-shadow(0 0 3px #fbbf24);
-            }
-          `}</style>
+          <style>{`.star { filter: drop-shadow(0 0 3px #fbbf24); }`}</style>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">
             What Our <span className="bg-gradient-to-r from-cyan-400 to-blue-600 bg-clip-text text-transparent">Partners</span> Say
           </h2>

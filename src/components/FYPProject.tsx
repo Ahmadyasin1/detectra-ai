@@ -23,7 +23,7 @@ export default function FYPProject() {
     {
       icon: Award,
       title: 'Supervisor',
-      content: 'Dr. Usman Aamer, Director of FOIT, University of Central Punjab',
+      content: 'Phases 1-2: Dr. Usman Aamer (Director FOIT, UCP) · Phases 3-4: Dr. Yasin Nasir (UCP)',
       color: 'from-violet-600 to-cyan-500',
     },
     {
@@ -156,7 +156,7 @@ export default function FYPProject() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={isInView ? { opacity: 1, y: 0 } : {}}
                     transition={{ duration: 0.5, delay: 1.0 + index * 0.1 }}
-                    className="flex justify-between items-center p-4 bg-gray-800/50 rounded-xl border border-cyan-500/20"
+                    className="flex justify-between items-center p-4 bg-white/10 rounded-xl border border-cyan-500/20"
                   >
                     <span className="text-gray-300 text-sm">{item.criterion}</span>
                     <span className="text-cyan-400 font-bold">{item.weightage}</span>

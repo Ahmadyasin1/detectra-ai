@@ -29,7 +29,7 @@ export default function Careers() {
   ];
 
   return (
-    <section id="careers" className="py-20 sm:py-32 bg-gray-900 relative overflow-hidden">
+    <section id="careers" className="py-20 sm:py-32 bg-white/5 backdrop-blur-md relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_var(--tw-gradient-stops))] from-cyan-500/5 via-transparent to-transparent" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10" ref={ref}>

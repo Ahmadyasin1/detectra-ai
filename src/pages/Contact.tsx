@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { useInView } from 'framer-motion';
 import { useRef, useState } from 'react';
 import { Mail, MapPin, Phone, Send, CheckCircle, AlertCircle } from 'lucide-react';
+import { submitContactForm } from '../lib/supabaseDb';
 
 export default function Contact() {
   const ref = useRef(null);
@@ -9,72 +10,83 @@ export default function Contact() {
   const [formData, setFormData] = useState({ name: '', email: '', message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [submitErrorMsg, setSubmitErrorMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setSubmitStatus('idle');
-
-    try {
-      // Simulate form submission
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    setSubmitErrorMsg(null);
+    const { error } = await submitContactForm({
+      name: formData.name,
+      email: formData.email,
+      message: formData.message,
+    });
+    if (error) {
+      setSubmitStatus('error');
+      setSubmitErrorMsg(error);
+    } else {
       setSubmitStatus('success');
       setFormData({ name: '', email: '', message: '' });
-      setTimeout(() => setSubmitStatus('idle'), 5000);
-    } catch (error) {
-      setSubmitStatus('error');
-      setTimeout(() => setSubmitStatus('idle'), 5000);
-    } finally {
-      setIsSubmitting(false);
+      setTimeout(() => setSubmitStatus('idle'), 6000);
     }
+    setIsSubmitting(false);
   };
 
   const contactInfo = [
     {
       icon: Mail,
       title: 'Email',
-      details: ['contact@nexariza.com', 'admin@nexariza.com', 'usman.aamer@ucp.edu.pk (Supervisor)'],
+      details: [
+        'mianahmadyasin3@gmail.com',
+        'usman.aamer@ucp.edu.pk (Supervisor · Phases 1-2)',
+        'yasin.nasir@ucp.edu.pk (Supervisor · Phases 3-4)',
+      ],
       color: 'from-blue-500 to-cyan-500',
     },
     {
       icon: Phone,
-      title: 'Phone',
-      details: ['+92 370 7348001', 'Mon-Fri, 9AM-6PM EST'],
+      title: 'Contact',
+      details: ['+92 370 7348001', 'Mon–Fri, 9AM–6PM PKT'],
       color: 'from-cyan-500 to-green-500',
     },
     {
       icon: MapPin,
       title: 'Location',
-      details: ['Innovation Hub, Silicon Valley', 'California, USA', 'University of Central Punjab, Pakistan'],
+      details: ['University of Central Punjab', 'Lahore, Pakistan', 'FOIT — Department of AI'],
       color: 'from-green-500 to-yellow-500',
     },
   ];
 
   const teamContacts = [
     {
-      name: 'Ahmad Yasin',
-      role: 'Founder & CEO',
-      email: 'ahmad.yasin@nexariza.com',
+      name:  'Ahmad Yasin',
+      role:  'AI Engineer · Lead Developer',
+      email: 'mianahmadyasin3@gmail.com',
     },
     {
-      name: 'Eman Sarfraz',
-      role: 'Chief Operating Officer',
-      email: 'eman.sarfraz@nexariza.com',
+      name:  'Eman Sarfraz',
+      role:  'AI Engineer · Backend & Pipeline',
+      email: 'emansarfraz@student.ucp.edu.pk',
     },
     {
-      name: 'Abdul Rehman',
-      role: 'AI/ML Engineer',
-      email: 'abdul.rehman@nexariza.com',
+      name:  'Abdul Rehman',
+      role:  'AI Engineer · Frontend & Integration',
+      email: 'abdulrehman@student.ucp.edu.pk',
     },
     {
-      name: 'Usman Aamer',
-      role: 'Supervisor & Director',
+      name:  'Dr. Usman Aamer',
+      role:  'Project Supervisor (Phases 1-2) · Director FOIT',
       email: 'usman.aamer@ucp.edu.pk',
+    },
+    {
+      name:  'Dr. Yasin Nasir',
+      role:  'Project Supervisor (Phases 3-4)',
+      email: 'yasin.nasir@ucp.edu.pk',
     },
   ];
 
   return (
-    <div className="pt-20">
+    <div className="pt-24 min-h-screen">
       {/* Hero Section */}
       <section className="py-20 sm:py-32 bg-gradient-to-b from-gray-950 to-gray-900 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_var(--tw-gradient-stops))] from-cyan-500/5 via-transparent to-transparent" />
@@ -127,7 +139,7 @@ export default function Contact() {
       </section>
 
       {/* Contact Form & Team Section */}
-      <section ref={ref} className="py-20 sm:py-32 bg-gray-900 relative overflow-hidden">
+      <section ref={ref} className="py-20 sm:py-32 bg-white/5 backdrop-blur-md relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Contact Form */}
@@ -149,7 +161,7 @@ export default function Contact() {
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl bg-gray-800/50 border border-cyan-500/20 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500/50 transition-all"
+                      className="w-full px-4 py-3 rounded-xl bg-white/10 border border-cyan-500/20 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500/50 transition-all"
                       placeholder="Your name"
                       required
                     />
@@ -161,7 +173,7 @@ export default function Contact() {
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl bg-gray-800/50 border border-cyan-500/20 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500/50 transition-all"
+                      className="w-full px-4 py-3 rounded-xl bg-white/10 border border-cyan-500/20 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500/50 transition-all"
                       placeholder="your@email.com"
                       required
                     />
@@ -173,7 +185,7 @@ export default function Contact() {
                       value={formData.message}
                       onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                       rows={6}
-                      className="w-full px-4 py-3 rounded-xl bg-gray-800/50 border border-cyan-500/20 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500/50 transition-all resize-none"
+                      className="w-full px-4 py-3 rounded-xl bg-white/10 border border-cyan-500/20 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500/50 transition-all resize-none"
                       placeholder="Tell us about your project..."
                       required
                     />
@@ -205,10 +217,19 @@ export default function Contact() {
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center gap-2 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400"
+                      className="flex flex-col gap-2 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-sm text-left"
                     >
-                      <AlertCircle className="w-5 h-5" />
-                      <span>Failed to send message. Please try again.</span>
+                      <div className="flex items-center gap-2 font-medium text-red-400">
+                        <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                        Could not save your message
+                      </div>
+                      {submitErrorMsg && (
+                        <p className="text-red-400/80 text-xs leading-relaxed pl-7">
+                          {submitErrorMsg.includes('relation') || submitErrorMsg.includes('does not exist')
+                            ? 'The contact form needs the contact_submissions table in Supabase. Run the project SQL migration in the dashboard.'
+                            : submitErrorMsg}
+                        </p>
+                      )}
                     </motion.div>
                   )}
                 </form>
@@ -234,7 +255,7 @@ export default function Contact() {
                       initial={{ opacity: 0, y: 20 }}
                       animate={isInView ? { opacity: 1, y: 0 } : {}}
                       transition={{ duration: 0.5, delay: 0.6 + index * 0.1 }}
-                      className="p-4 bg-gray-800/50 rounded-xl border border-cyan-500/20 hover:border-cyan-500/50 transition-all"
+                      className="p-4 bg-white/10 rounded-xl border border-cyan-500/20 hover:border-cyan-500/50 transition-all"
                     >
                       <h4 className="text-white font-semibold mb-2">{member.name}</h4>
                       <p className="text-cyan-400 text-sm mb-2">{member.role}</p>

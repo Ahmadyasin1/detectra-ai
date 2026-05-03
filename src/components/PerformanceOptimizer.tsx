@@ -46,8 +46,8 @@ export default function PerformanceOptimizer() {
     const registerServiceWorker = () => {
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js')
-          .then(() => console.log('Service Worker registered'))
-          .catch(() => console.log('Service Worker registration failed'));
+          .then(() => {})
+          .catch(() => {});
       }
     };
 

@@ -1,443 +1,237 @@
-import { motion } from 'framer-motion';
-import { useInView } from 'framer-motion';
+import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
-import { BookOpen, ExternalLink, Quote, Award, TrendingUp, Users, Calendar } from 'lucide-react';
+import { BookOpen, ExternalLink, Award, Cpu, Mic, Eye, Brain, Volume2, Users2 } from 'lucide-react';
+
+interface Paper {
+  id:          number;
+  title:       string;
+  authors:     string;
+  venue:       string;
+  year:        number;
+  module:      string;
+  icon:        React.FC<{ className?: string }>;
+  color:       string;
+  relevance:   string;
+  description: string;
+  url?:        string;
+}
+
+const PAPERS: Paper[] = [
+  {
+    id: 1,
+    title: 'YOLOv8: A New State-of-the-Art YOLO Model',
+    authors: 'G. Jocher, A. Chaurasia, J. Qiu — Ultralytics',
+    venue: 'Ultralytics', year: 2023,
+    module: 'Object Detection',
+    icon: Eye,
+    color: 'from-blue-500 to-cyan-500',
+    relevance: 'Core visual detection backbone',
+    description: 'YOLOv8 introduces a new anchor-free detection head and improved backbone, achieving state-of-the-art real-time object detection with the -seg variant adding instance segmentation. Used as the primary detection model in Detectra AI.',
+    url: 'https://github.com/ultralytics/ultralytics',
+  },
+  {
+    id: 2,
+    title: 'ByteTrack: Multi-Object Tracking by Associating Every Detection Box',
+    authors: 'Y. Zhang et al. — ECCV 2022',
+    venue: 'ECCV', year: 2022,
+    module: 'Person Tracking',
+    icon: Users2,
+    color: 'from-cyan-500 to-indigo-500',
+    relevance: 'Persistent person ID assignment',
+    description: 'ByteTrack associates every detection box (high and low confidence) using inter-frame motion cues, achieving near-perfect tracking on MOT benchmarks. Detectra uses it to assign stable IDs across video frames for person re-identification.',
+    url: 'https://arxiv.org/abs/2110.06864',
+  },
+  {
+    id: 3,
+    title: 'Robust Speech Recognition via Large-Scale Weak Supervision',
+    authors: 'A. Radford et al. — OpenAI / ICML 2023',
+    venue: 'ICML', year: 2023,
+    module: 'Speech-to-Text',
+    icon: Mic,
+    color: 'from-green-500 to-emerald-600',
+    relevance: 'Speech-to-text transcription',
+    description: 'OpenAI Whisper is trained on 680K hours of multilingual web audio using weak supervision, achieving near-human word-error rates. Detectra AI uses the "whisper-small" variant for CPU-feasible real-time transcription with automatic language detection.',
+    url: 'https://arxiv.org/abs/2212.04356',
+  },
+  {
+    id: 4,
+    title: 'AudioSet: An Ontology and Human-Labeled Dataset for Audio Events',
+    authors: 'J. F. Gemmeke et al. — Google / ICASSP 2017',
+    venue: 'ICASSP', year: 2017,
+    module: 'Audio Classification',
+    icon: Volume2,
+    color: 'from-yellow-500 to-orange-500',
+    relevance: 'Environmental sound classification',
+    description: 'AudioSet defines a hierarchical ontology of 632 audio event classes and provides 2M+ human-labeled 10-second clips. YAMNet, trained on AudioSet, is used in Detectra AI to classify 521 categories of environmental sounds with per-second anomaly scores.',
+    url: 'https://research.google.com/audioset/',
+  },
+  {
+    id: 5,
+    title: 'VideoMAE: Masked Autoencoders are Data-Efficient Learners for Self-Supervised Video Pre-Training',
+    authors: 'Z. Tong et al. — NeurIPS 2022',
+    venue: 'NeurIPS', year: 2022,
+    module: 'Action Recognition',
+    icon: Brain,
+    color: 'from-purple-500 to-pink-600',
+    relevance: 'Temporal action understanding',
+    description: 'VideoMAE applies masked autoencoders to video by randomly masking 90–95% of tokens and reconstructing them, learning rich spatiotemporal representations. Fine-tuned on UCF-101, it powers the action recognition module that detects fighting, falling, loitering and other activities.',
+    url: 'https://arxiv.org/abs/2203.12602',
+  },
+  {
+    id: 6,
+    title: 'Attention Is All You Need',
+    authors: 'A. Vaswani et al. — Google Brain / NeurIPS 2017',
+    venue: 'NeurIPS', year: 2017,
+    module: 'Fusion Engine',
+    icon: Cpu,
+    color: 'from-rose-500 to-red-600',
+    relevance: 'Foundation of the Cross-Modal Transformer',
+    description: 'The seminal transformer paper introducing multi-head self-attention as the core mechanism for sequence modeling. Detectra\'s Cross-Modal Fusion Engine is built on multi-head cross-attention (visual queries × audio keys/values) across temporal bins to align and fuse modalities.',
+    url: 'https://arxiv.org/abs/1706.03762',
+  },
+  {
+    id: 7,
+    title: 'Learning Transferable Visual Models from Natural Language Supervision (CLIP)',
+    authors: 'A. Radford et al. — OpenAI / ICML 2021',
+    venue: 'ICML', year: 2021,
+    module: 'Multimodal Alignment',
+    icon: Brain,
+    color: 'from-indigo-500 to-blue-600',
+    relevance: 'Cross-modal representation learning',
+    description: 'CLIP demonstrates that visual and language representations can be jointly trained via contrastive learning on 400M image-text pairs. Detectra\'s fusion engine is inspired by CLIP\'s approach of aligning representations from different modalities into a shared embedding space.',
+    url: 'https://arxiv.org/abs/2103.00020',
+  },
+  {
+    id: 8,
+    title: 'An Image is Worth 16×16 Words: Transformers for Image Recognition at Scale (ViT)',
+    authors: 'A. Dosovitskiy et al. — Google Brain / ICLR 2021',
+    venue: 'ICLR', year: 2021,
+    module: 'Visual Features',
+    icon: Eye,
+    color: 'from-teal-500 to-cyan-600',
+    relevance: 'Patch-based visual encoding',
+    description: 'Vision Transformer (ViT) splits images into fixed-size patches and processes them with a standard transformer encoder. The patch-embedding architecture directly influences the visual feature extraction strategy used in Detectra\'s multimodal fusion pipeline.',
+    url: 'https://arxiv.org/abs/2010.11929',
+  },
+];
+
+const IMPACT_LEVELS: Record<string, { label: string; color: string }> = {
+  'Object Detection':     { label: 'Direct Integration', color: 'badge-cyan'   },
+  'Person Tracking':      { label: 'Direct Integration', color: 'badge-cyan'   },
+  'Speech-to-Text':       { label: 'Direct Integration', color: 'badge-cyan'   },
+  'Audio Classification': { label: 'Direct Integration', color: 'badge-cyan'   },
+  'Action Recognition':   { label: 'Direct Integration', color: 'badge-cyan'   },
+  'Fusion Engine':        { label: 'Architecture Base',  color: 'badge-blue'   },
+  'Multimodal Alignment': { label: 'Conceptual Basis',   color: 'badge-yellow' },
+  'Visual Features':      { label: 'Architecture Base',  color: 'badge-blue'   },
+};
 
 export default function ResearchLiterature() {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: '-100px' });
-
-  const researchPapers = [
-    {
-      id: 1,
-      title: 'Learning Transferable Visual Models From Natural Language Supervision',
-      authors: 'A. Radford et al.',
-      venue: 'ICML',
-      year: 2021,
-      impact: 'High',
-      relevance: 'Foundation for multimodal understanding',
-      description: 'CLIP model that learns visual representations from natural language supervision, enabling zero-shot image classification.',
-      color: 'from-blue-500 to-cyan-500',
-    },
-    {
-      id: 2,
-      title: 'Flamingo: A Visual Language Model for Few-Shot Learning',
-      authors: 'J.-B. Alayrac et al.',
-      venue: 'DeepMind',
-      year: 2022,
-      impact: 'High',
-      relevance: 'Multimodal few-shot learning',
-      description: 'A visual language model that can learn from few examples, combining vision and language understanding.',
-      color: 'from-cyan-500 to-green-500',
-    },
-    {
-      id: 3,
-      title: 'GPT-4 Technical Report',
-      authors: 'OpenAI',
-      venue: 'OpenAI',
-      year: 2023,
-      impact: 'Very High',
-      relevance: 'Large language model capabilities',
-      description: 'Technical report on GPT-4, showcasing advanced language understanding and multimodal capabilities.',
-      color: 'from-green-500 to-yellow-500',
-    },
-    {
-      id: 4,
-      title: 'End-to-End Object Detection with Transformers',
-      authors: 'N. Carion et al.',
-      venue: 'ECCV',
-      year: 2020,
-      impact: 'High',
-      relevance: 'Object detection architecture',
-      description: 'DETR model that treats object detection as a direct set prediction problem using transformers.',
-      color: 'from-yellow-500 to-orange-500',
-    },
-    {
-      id: 5,
-      title: 'wav2vec 2.0: A Framework for Self-Supervised Learning of Speech Representations',
-      authors: 'A. Baevski et al.',
-      venue: 'NeurIPS',
-      year: 2020,
-      impact: 'High',
-      relevance: 'Speech representation learning',
-      description: 'Self-supervised learning framework for speech recognition that learns speech representations from raw audio.',
-      color: 'from-orange-500 to-red-500',
-    },
-    {
-      id: 6,
-      title: 'An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale',
-      authors: 'A. Dosovitskiy et al.',
-      venue: 'ICLR',
-      year: 2021,
-      impact: 'High',
-      relevance: 'Vision transformer architecture',
-      description: 'Vision Transformer (ViT) that applies transformers to image recognition tasks with excellent results.',
-      color: 'from-red-500 to-pink-500',
-    },
-    {
-      id: 7,
-      title: 'Anticipative Video Transformer for Recognition and Forecasting',
-      authors: 'R. Girdhar et al.',
-      venue: 'CVPR',
-      year: 2021,
-      impact: 'Medium',
-      relevance: 'Video understanding and prediction',
-      description: 'Transformer-based model for video understanding that can anticipate future actions and events.',
-      color: 'from-pink-500 to-purple-500',
-    },
-  ];
-
-  const researchGaps = [
-    'Limited integration of real-time multimodal fusion in web applications',
-    'Lack of privacy-preserving, API-free video analysis platforms',
-    'Insufficient contextual understanding across different modalities',
-    'Limited scalability for deployment on standard hardware',
-    'Inadequate timeline-based reporting for video analysis insights',
-  ];
-
-  const methodology = [
-    {
-      phase: 'Literature Review',
-      description: 'Comprehensive analysis of state-of-the-art multimodal AI models and video analysis techniques',
-      deliverables: ['Research Report', 'Technology Stack Selection', 'Architecture Design'],
-    },
-    {
-      phase: 'Dataset Collection',
-      description: 'Gathering and curating datasets for object detection, logo recognition, motion analysis, and audio processing',
-      deliverables: ['Custom Logo Dataset', 'Video Dataset Collection', 'Audio Dataset Preparation'],
-    },
-    {
-      phase: 'Model Development',
-      description: 'Implementing and training individual modules for each modality with optimization for performance',
-      deliverables: ['Trained Models', 'Performance Benchmarks', 'Integration Scripts'],
-    },
-    {
-      phase: 'Fusion Engine',
-      description: 'Developing transformer-based multimodal fusion engine for contextual alignment',
-      deliverables: ['Fusion Architecture', 'Temporal Alignment Module', 'Contextual Understanding Engine'],
-    },
-    {
-      phase: 'System Integration',
-      description: 'Integrating all modules into a unified web application with interactive dashboard',
-      deliverables: ['Web Application', 'Interactive Dashboard', 'Timeline Reports'],
-    },
-  ];
-
-  const researchImpact = {
-    academic: [
-      'Contribution to multimodal AI research community',
-      'Novel approach to privacy-preserving video analysis',
-      'Open-source implementation for research reproducibility',
-    ],
-    industry: [
-      'Practical solution for surveillance and security applications',
-      'Scalable platform for sports analytics and media monitoring',
-      'Cost-effective alternative to existing API-dependent solutions',
-    ],
-    societal: [
-      'Enhanced privacy protection in video analysis',
-      'Improved accessibility to advanced AI technologies',
-      'Support for smart city initiatives and public safety',
-    ],
-  };
+  const headerRef = useRef(null);
+  const headerIn  = useInView(headerRef, { once: true, margin: '-80px' });
 
   return (
-    <div className="pt-20">
-      {/* Hero Section */}
-      <section className="py-20 sm:py-32 bg-gradient-to-b from-gray-950 to-gray-900 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_var(--tw-gradient-stops))] from-cyan-500/5 via-transparent to-transparent" />
-        
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center mb-16"
-          >
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6">
-              Research & <span className="bg-gradient-to-r from-cyan-400 to-blue-600 bg-clip-text text-transparent">Literature</span>
+    <div className="pt-24 min-h-screen bg-transparent">
+
+      {/* Header */}
+      <section className="py-16 sm:py-24 bg-gradient-to-b from-gray-900 to-gray-950 relative overflow-hidden">
+        <div className="absolute inset-0 bg-grid-dark opacity-40" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,_var(--tw-gradient-stops))] from-indigo-500/8 via-transparent to-transparent" />
+
+        <div ref={headerRef} className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={headerIn ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.55 }}>
+            <span className="badge-blue mb-5 inline-flex">
+              <BookOpen className="w-3.5 h-3.5" />
+              Research Foundation · 8 Key Papers
+            </span>
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-5">
+              Literature <span className="text-gradient-cyan">Review</span>
             </h1>
-            <p className="text-gray-300 text-xl max-w-3xl mx-auto">
-              Comprehensive literature review and research foundation for Detectra AI
+            <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+              The academic papers that directly underpin every AI module in Detectra AI — from detection backbone to cross-modal fusion engine.
             </p>
           </motion.div>
-
-          {/* Research Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-16">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-center"
-            >
-              <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <BookOpen className="w-8 h-8 text-white" />
-              </div>
-              <div className="text-3xl font-bold text-white mb-2">7</div>
-              <div className="text-gray-300 text-sm">Research Papers</div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="text-center"
-            >
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Award className="w-8 h-8 text-white" />
-              </div>
-              <div className="text-3xl font-bold text-white mb-2">5</div>
-              <div className="text-gray-300 text-sm">Top-Tier Venues</div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              className="text-center"
-            >
-              <div className="w-16 h-16 bg-gradient-to-br from-violet-600 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <TrendingUp className="w-8 h-8 text-white" />
-              </div>
-              <div className="text-3xl font-bold text-white mb-2">2020-2023</div>
-              <div className="text-gray-300 text-sm">Publication Years</div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
-              className="text-center"
-            >
-              <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Users className="w-8 h-8 text-white" />
-              </div>
-              <div className="text-3xl font-bold text-white mb-2">15+</div>
-              <div className="text-gray-300 text-sm">Authors Cited</div>
-            </motion.div>
-          </div>
         </div>
       </section>
 
-      {/* Research Papers Section */}
-      <section className="py-20 sm:py-32 bg-gray-900 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6">
-              Key <span className="bg-gradient-to-r from-cyan-400 to-blue-600 bg-clip-text text-transparent">Research Papers</span>
-            </h2>
-            <p className="text-gray-300 text-xl max-w-3xl mx-auto">
-              Foundational research papers that inform our multimodal video intelligence approach
-            </p>
-          </motion.div>
-
-          <div className="space-y-8">
-            {researchPapers.map((paper, index) => (
-              <motion.div
-                key={paper.id}
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: index * 0.1 }}
-                whileHover={{ y: -10, scale: 1.02 }}
-                className="group"
-              >
-                <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-blue-600/10 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                  
-                  <div className="relative p-8 rounded-3xl bg-gradient-to-br from-gray-800 to-gray-900 border border-cyan-500/20 hover:border-cyan-500/50 transition-all duration-300">
-                    <div className="flex items-start justify-between mb-6">
-                      <div className="flex items-start gap-4 flex-1">
-                        <div className={`w-16 h-16 bg-gradient-to-br ${paper.color} rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg`}>
-                          <span className="text-white font-bold text-lg">{paper.id}</span>
-                        </div>
-                        
-                        <div className="flex-1">
-                          <h3 className="text-xl font-bold text-white mb-2">{paper.title}</h3>
-                          <div className="flex items-center gap-4 text-sm mb-3">
-                            <span className="text-gray-400">{paper.authors}</span>
-                            <span className="text-gray-400">•</span>
-                            <span className="text-gray-400">{paper.venue}</span>
-                            <span className="text-gray-400">•</span>
-                            <span className="text-gray-400">{paper.year}</span>
-                          </div>
-                          <p className="text-gray-300 leading-relaxed mb-4">{paper.description}</p>
-                          
-                          <div className="flex items-center gap-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                              paper.impact === 'Very High' 
-                                ? 'text-red-400 bg-red-500/20 border border-red-500/30'
-                                : paper.impact === 'High'
-                                ? 'text-orange-400 bg-orange-500/20 border border-orange-500/30'
-                                : 'text-yellow-400 bg-yellow-500/20 border border-yellow-500/30'
-                            }`}>
-                              {paper.impact} Impact
-                            </span>
-                            <span className="px-3 py-1 bg-cyan-500/10 border border-cyan-500/30 rounded-full text-cyan-400 text-xs">
-                              {paper.relevance}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Research Gaps Section */}
-      <section ref={ref} className="py-20 sm:py-32 bg-gradient-to-b from-gray-900 to-gray-950 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={isInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.8 }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6">
-              Research <span className="bg-gradient-to-r from-cyan-400 to-blue-600 bg-clip-text text-transparent">Gaps</span>
-            </h2>
-            <p className="text-gray-300 text-xl max-w-3xl mx-auto">
-              Key gaps in current research that Detectra AI addresses
-            </p>
-          </motion.div>
-
-          <div className="max-w-4xl mx-auto">
-            <div className="space-y-6">
-              {researchGaps.map((gap, index) => (
+      {/* Papers grid */}
+      <section className="py-12 sm:py-16">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {PAPERS.map((paper, i) => {
+              const impact = IMPACT_LEVELS[paper.module];
+              return (
                 <motion.div
-                  key={index}
-                  initial={{ opacity: 0, x: -30 }}
-                  animate={isInView ? { opacity: 1, x: 0 } : {}}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  className="flex items-start gap-4 p-6 bg-gray-800/50 rounded-xl border border-cyan-500/20 hover:border-cyan-500/50 transition-all"
+                  key={paper.id}
+                  initial={{ opacity: 0, y: 24 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-60px' }}
+                  transition={{ duration: 0.5, delay: i * 0.06 }}
+                  className="card-glass p-5 hover:border-white/20 transition-all duration-200 group flex flex-col"
                 >
-                  <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                    <span className="text-white text-sm font-bold">{index + 1}</span>
+                  {/* Header row */}
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className={`w-11 h-11 bg-gradient-to-br ${paper.color} rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-105 transition-transform`}>
+                      <paper.icon className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className={impact.color}>{impact.label}</span>
+                        <span className="badge-gray">{paper.module}</span>
+                        <span className="text-gray-600 text-xs">{paper.venue} {paper.year}</span>
+                      </div>
+                      <h3 className="text-white font-semibold text-sm leading-snug">{paper.title}</h3>
+                    </div>
                   </div>
-                  <p className="text-gray-300 text-lg leading-relaxed">{gap}</p>
+
+                  {/* Authors */}
+                  <p className="text-gray-500 text-xs mb-3 flex items-center gap-1.5">
+                    <Award className="w-3 h-3 flex-shrink-0" />
+                    {paper.authors}
+                  </p>
+
+                  {/* Relevance tag */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className={`h-px flex-1 bg-gradient-to-r ${paper.color} opacity-30`} />
+                    <span className="text-gray-400 text-xs italic flex-shrink-0">{paper.relevance}</span>
+                    <div className={`h-px flex-1 bg-gradient-to-r ${paper.color} opacity-30`} />
+                  </div>
+
+                  {/* Description */}
+                  <p className="text-gray-400 text-sm leading-relaxed flex-1">{paper.description}</p>
+
+                  {/* Link */}
+                  {paper.url && (
+                    <a
+                      href={paper.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 inline-flex items-center gap-1.5 text-xs text-cyan-500 hover:text-cyan-400 transition-colors self-start"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      View paper / repository
+                    </a>
+                  )}
                 </motion.div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      {/* Methodology Section */}
-      <section className="py-20 sm:py-32 bg-gray-900 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      {/* Summary footer */}
+      <section className="py-12 bg-white/5 backdrop-blur-md border-t border-white/10">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center mb-16"
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
           >
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6">
-              Research <span className="bg-gradient-to-r from-cyan-400 to-blue-600 bg-clip-text text-transparent">Methodology</span>
-            </h2>
-            <p className="text-gray-300 text-xl max-w-3xl mx-auto">
-              Systematic approach to developing Detectra AI
+            <p className="text-gray-400 text-sm leading-relaxed max-w-2xl mx-auto">
+              Detectra AI synthesises these foundational works into a single, deployable pipeline — replacing multi-vendor API dependencies with self-contained, privacy-preserving, CPU-optimised inference. Each model is either used directly (YOLOv8, Whisper, YAMNet, VideoMAE, ByteTrack) or architecturally inspired by the research listed above.
             </p>
           </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {methodology.map((phase, index) => (
-              <motion.div
-                key={phase.phase}
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: index * 0.1 }}
-                whileHover={{ y: -10, scale: 1.05 }}
-                className="group"
-              >
-                <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-blue-600/10 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                  
-                  <div className="relative p-8 rounded-3xl bg-gradient-to-br from-gray-800 to-gray-900 border border-cyan-500/20 hover:border-cyan-500/50 transition-all duration-300 h-full">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
-                        <span className="text-white font-bold text-sm">{index + 1}</span>
-                      </div>
-                      <h3 className="text-xl font-bold text-white">{phase.phase}</h3>
-                    </div>
-                    
-                    <p className="text-gray-300 leading-relaxed mb-4">{phase.description}</p>
-                    
-                    <div>
-                      <h4 className="text-white font-semibold mb-2">Deliverables:</h4>
-                      <div className="space-y-1">
-                        {phase.deliverables.map((deliverable, delIndex) => (
-                          <div key={delIndex} className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full" />
-                            <span className="text-gray-300 text-sm">{deliverable}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Research Impact Section */}
-      <section className="py-20 sm:py-32 bg-gradient-to-b from-gray-900 to-gray-950 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6">
-              Research <span className="bg-gradient-to-r from-cyan-400 to-blue-600 bg-clip-text text-transparent">Impact</span>
-            </h2>
-            <p className="text-gray-300 text-xl max-w-3xl mx-auto">
-              Expected contributions and impact of Detectra AI research
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {Object.entries(researchImpact).map(([category, impacts], index) => (
-              <motion.div
-                key={category}
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: index * 0.1 }}
-                whileHover={{ y: -10, scale: 1.05 }}
-                className="group"
-              >
-                <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-blue-600/10 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                  
-                  <div className="relative p-8 rounded-3xl bg-gradient-to-br from-gray-800 to-gray-900 border border-cyan-500/20 hover:border-cyan-500/50 transition-all duration-300 h-full">
-                    <h3 className="text-xl font-bold text-white mb-6 capitalize flex items-center gap-3">
-                      <Quote className="w-6 h-6 text-cyan-400" />
-                      {category} Impact
-                    </h3>
-                    
-                    <ul className="space-y-3">
-                      {impacts.map((impact, impactIndex) => (
-                        <li key={impactIndex} className="flex items-start gap-3">
-                          <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full mt-2 flex-shrink-0" />
-                          <span className="text-gray-300 text-sm leading-relaxed">{impact}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
         </div>
       </section>
     </div>

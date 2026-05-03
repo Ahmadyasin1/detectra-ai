@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useInView } from 'framer-motion';
 import { useRef } from 'react';
-import { BookOpen, FileText, Users, Award, ExternalLink, Quote } from 'lucide-react';
+import { FileText, Quote } from 'lucide-react';
 
 export default function ResearchLiterature() {
   const ref = useRef(null);
@@ -148,7 +148,7 @@ export default function ResearchLiterature() {
                       initial={{ opacity: 0, y: 20 }}
                       animate={isInView ? { opacity: 1, y: 0 } : {}}
                       transition={{ duration: 0.5, delay: 0.4 + index * 0.1 }}
-                      className="p-6 bg-gray-800/50 rounded-xl border border-cyan-500/20 hover:border-cyan-500/50 transition-all"
+                      className="p-6 bg-white/10 rounded-xl border border-cyan-500/20 hover:border-cyan-500/50 transition-all"
                     >
                       <div className="flex items-start gap-4">
                         <div className={`w-12 h-12 bg-gradient-to-br ${paper.color} rounded-lg flex items-center justify-center flex-shrink-0`}>
@@ -228,7 +228,7 @@ export default function ResearchLiterature() {
                       initial={{ opacity: 0, y: 20 }}
                       animate={isInView ? { opacity: 1, y: 0 } : {}}
                       transition={{ duration: 0.5, delay: 1.0 + index * 0.1 }}
-                      className="p-4 bg-gray-800/50 rounded-xl border border-cyan-500/20"
+                      className="p-4 bg-white/10 rounded-xl border border-cyan-500/20"
                     >
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="text-white font-semibold">{phase.phase}</h4>

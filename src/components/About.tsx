@@ -29,7 +29,7 @@ export default function About() {
   ];
 
   return (
-    <section id="about" className="py-20 sm:py-32 bg-gray-900 relative overflow-hidden">
+    <section id="about" className="py-20 sm:py-32 bg-white/5 backdrop-blur-md relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10" ref={ref}>

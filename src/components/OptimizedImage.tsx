@@ -8,12 +8,11 @@ interface OptimizedImageProps {
   priority?: boolean;
 }
 
-export default function OptimizedImage({ 
-  src, 
-  alt, 
-  className = '', 
-  placeholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMzMzIi8+PC9zdmc+',
-  priority = false 
+export default function OptimizedImage({
+  src,
+  alt,
+  className = '',
+  priority = false
 }: OptimizedImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isInView, setIsInView] = useState(priority);
@@ -46,7 +45,7 @@ export default function OptimizedImage({
   return (
     <div className={`relative overflow-hidden ${className}`}>
       {!isLoaded && (
-        <div className="absolute inset-0 bg-gray-800 animate-pulse" />
+        <div className="absolute inset-0 bg-white/10 animate-pulse" />
       )}
       {isInView && (
         <img

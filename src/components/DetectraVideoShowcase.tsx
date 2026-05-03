@@ -95,6 +95,7 @@ export default function DetectraVideoShowcase() {
         cancelAnimationFrame(animationRef.current);
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, videoError]);
 
   const drawVideoFrame = () => {
@@ -177,12 +178,9 @@ export default function DetectraVideoShowcase() {
 
   useEffect(() => {
     drawVideoFrame();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFrame]);
 
-  const resetVideo = () => {
-    setIsPlaying(false);
-    setCurrentFrame(0);
-  };
 
   return (
     <section className="py-16 sm:py-24 bg-gradient-to-b from-gray-900 to-gray-950 relative overflow-hidden">
@@ -235,7 +233,7 @@ export default function DetectraVideoShowcase() {
 
               <div className="relative">
                 {videoError ? (
-                  <div className="w-full h-80 bg-gray-900 rounded-lg border border-gray-700 flex items-center justify-center">
+                  <div className="w-full h-80 bg-white/5 backdrop-blur-md rounded-lg border border-white/20 flex items-center justify-center">
                     <div className="text-center">
                       <Camera className="w-12 h-12 text-gray-600 mx-auto mb-2" />
                       <p className="text-gray-400 text-sm">Video unavailable. Showing demo visualization.</p>
@@ -246,7 +244,7 @@ export default function DetectraVideoShowcase() {
                     <video
                       ref={videoRef}
                       src={DEMO_VIDEO_URL}
-                      className="w-full h-80 bg-gray-900 rounded-lg border border-gray-700 object-contain"
+                      className="w-full h-80 bg-white/5 backdrop-blur-md rounded-lg border border-white/20 object-contain"
                       controls={false}
                       muted={isMuted}
                       playsInline
@@ -262,7 +260,7 @@ export default function DetectraVideoShowcase() {
                       onPause={() => setIsPlaying(false)}
                     />
                     {videoLoading && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900 rounded-lg">
+                      <div className="absolute inset-0 flex items-center justify-center bg-white/5 backdrop-blur-md rounded-lg">
                         <div className="text-center">
                           <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                           <p className="text-gray-400 text-sm">Loading video...</p>
@@ -271,7 +269,7 @@ export default function DetectraVideoShowcase() {
                     )}
                     
                     {/* Video Controls Overlay */}
-                    <div className="absolute bottom-4 left-4 right-4 bg-gray-900/80 backdrop-blur-sm rounded-lg p-3">
+                    <div className="absolute bottom-4 left-4 right-4 bg-white/5 backdrop-blur-md backdrop-blur-sm rounded-lg p-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <motion.button
@@ -382,7 +380,7 @@ export default function DetectraVideoShowcase() {
                   { type: 'Object Classification', accuracy: '97.8%', color: '#8b5cf6' },
                   { type: 'Scene Understanding', accuracy: '96.5%', color: '#f59e0b' },
                   { type: 'Audio Analysis', accuracy: '94.2%', color: '#10b981' }
-                ].map((capability, index) => (
+                ].map((capability) => (
                   <div key={capability.type} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div 

@@ -87,7 +87,8 @@ export default function Contact() {
                   <h4 className="text-white font-semibold mb-1">Email</h4>
                   <p className="text-gray-300">contact@nexariza.com</p>
                   <p className="text-gray-400 text-sm">admin@nexariza.com</p>
-                  <p className="text-cyan-400 text-sm">usman.aamer@ucp.edu.pk (Supervisor)</p>
+                  <p className="text-cyan-400 text-sm">usman.aamer@ucp.edu.pk (Supervisor · Phases 1-2)</p>
+                  <p className="text-cyan-400 text-sm">yasin.nasir@ucp.edu.pk (Supervisor · Phases 3-4)</p>
                 </div>
               </motion.div>
 
@@ -134,7 +135,7 @@ export default function Contact() {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl bg-gray-800/50 border border-cyan-500/20 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500/50 transition-all"
+                  className="w-full px-4 py-3 rounded-xl bg-white/10 border border-cyan-500/20 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500/50 transition-all"
                   placeholder="Your name"
                   required
                 />
@@ -146,7 +147,7 @@ export default function Contact() {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl bg-gray-800/50 border border-cyan-500/20 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500/50 transition-all"
+                  className="w-full px-4 py-3 rounded-xl bg-white/10 border border-cyan-500/20 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500/50 transition-all"
                   placeholder="your@email.com"
                   required
                 />
@@ -158,7 +159,7 @@ export default function Contact() {
                   value={formData.message}
                   onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                   rows={6}
-                  className="w-full px-4 py-3 rounded-xl bg-gray-800/50 border border-cyan-500/20 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500/50 transition-all resize-none"
+                  className="w-full px-4 py-3 rounded-xl bg-white/10 border border-cyan-500/20 text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500/50 transition-all resize-none"
                   placeholder="Tell us about your project..."
                   required
                 />

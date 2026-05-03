@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useInView } from 'framer-motion';
 import { useRef } from 'react';
-import { Brain, Target, Award, Users, Clock, BookOpen, Eye, Zap } from 'lucide-react';
+import { Brain, Target, Award, Users, Clock, Eye, Zap } from 'lucide-react';
 
 export default function Project() {
   const ref = useRef(null);
@@ -23,7 +23,7 @@ export default function Project() {
     {
       icon: Award,
       title: 'Supervisor',
-      content: 'Dr. Usman Aamer, Director of FOIT, University of Central Punjab',
+      content: 'Phases 1-2: Dr. Usman Aamer (Director FOIT, UCP) · Phases 3-4: Dr. Yasin Nasir (UCP)',
       color: 'from-violet-600 to-cyan-500',
     },
     {
@@ -74,7 +74,7 @@ export default function Project() {
   ];
 
   return (
-    <div className="pt-20">
+    <div className="pt-24 min-h-screen">
       {/* Hero Section */}
       <section className="py-20 sm:py-32 bg-gradient-to-b from-gray-950 to-gray-900 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_var(--tw-gradient-stops))] from-cyan-500/5 via-transparent to-transparent" />
@@ -123,7 +123,7 @@ export default function Project() {
       </section>
 
       {/* Objectives Section */}
-      <section className="py-20 sm:py-32 bg-gray-900 relative overflow-hidden">
+      <section className="py-20 sm:py-32 bg-white/5 backdrop-blur-md relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -147,7 +147,7 @@ export default function Project() {
                   initial={{ opacity: 0, x: -30 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5, delay: index * 0.1 }}
-                  className="flex items-start gap-4 p-6 bg-gray-800/50 rounded-xl border border-cyan-500/20 hover:border-cyan-500/50 transition-all"
+                  className="flex items-start gap-4 p-6 bg-white/10 rounded-xl border border-cyan-500/20 hover:border-cyan-500/50 transition-all"
                 >
                   <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
                     <span className="text-white text-sm font-bold">{index + 1}</span>

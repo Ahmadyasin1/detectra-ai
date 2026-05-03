@@ -84,27 +84,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
           if (session?.user) {
             await fetchUserProfile(session.user.id);
-            
-            // Handle OAuth redirect after successful sign-in
+
+            // Only redirect via window.location.href for OAuth providers.
+            // Email/password logins use React Router navigate() in SignIn.tsx,
+            // which avoids a full-page reload and the race condition it causes.
             if (event === 'SIGNED_IN') {
               const savedPath = sessionStorage.getItem('oauth_redirect_path');
               const savedOrigin = sessionStorage.getItem('oauth_origin');
-              
-              if (savedPath) {
-                sessionStorage.removeItem('oauth_redirect_path');
-                sessionStorage.removeItem('oauth_origin');
-                
-                // Build the full URL - use saved origin if available, otherwise current origin
-                const redirectUrl = savedOrigin 
+              const provider = session?.user?.app_metadata?.provider;
+              const isOAuth = provider && provider !== 'email';
+
+              // Always clean up the saved paths
+              sessionStorage.removeItem('oauth_redirect_path');
+              sessionStorage.removeItem('oauth_origin');
+
+              if (isOAuth && savedPath) {
+                const redirectUrl = savedOrigin
                   ? `${savedOrigin}${savedPath}`
                   : `${window.location.origin}${savedPath}`;
-                
-                // Safety check: Never redirect to localhost in production
+
                 if (window.location.hostname !== 'localhost' && redirectUrl.includes('localhost')) {
-                  // Use current origin instead
                   window.location.href = `${window.location.origin}${savedPath}`;
                 } else {
-                  // Use setTimeout to ensure state is updated before navigation
                   setTimeout(() => {
                     window.location.href = redirectUrl;
                   }, 100);
@@ -291,11 +292,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return { error: null };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Sign up error:', err);
       return { 
         error: { 
-          message: err.message || 'An unexpected error occurred during sign up. Please try again.' 
+          message: err instanceof Error ? err.message : 'An unexpected error occurred during sign up. Please try again.' 
         } 
       };
     }
@@ -335,11 +336,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return { error: null };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Sign in error:', err);
       return { 
         error: { 
-          message: err.message || 'An unexpected error occurred during sign in. Please try again.' 
+          message: err instanceof Error ? err.message : 'An unexpected error occurred during sign in. Please try again.' 
         } 
       };
     }
@@ -352,7 +353,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const savedPath = sessionStorage.getItem('oauth_redirect_path');
       const redirectPath = savedPath || 
         (window.location.pathname === '/signin' || window.location.pathname === '/signup' 
-          ? '/demo' 
+          ? '/analyze' 
           : window.location.pathname);
 
       // Build the redirect URL - ensure it works in both dev and production
@@ -409,40 +410,83 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // The redirect will happen automatically
       // Profile will be created automatically when user returns via onAuthStateChange
       return { error: null };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Social auth error:', err);
       sessionStorage.removeItem('oauth_redirect_path');
       return { 
         error: { 
-          message: err.message || `Failed to sign in with ${provider}. Please try again.` 
+          message: err instanceof Error ? err.message : `Failed to sign in with ${provider}. Please try again.` 
         } 
       };
     }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    // 1. Kick off backend signout, but do not await (prevents hanging if offline)
+    Promise.race([
+      supabase.auth.signOut(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1000))
+    ]).catch(err => console.warn('Supabase signout failed or timed out:', err));
+
+    // 2. Guarantee local React state is cleared
+    setSession(null);
+    setUser(null);
     setProfile(null);
+
+    // 3. Purge LocalStorage and SessionStorage tokens comprehensively
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+      sessionStorage.clear();
+    } catch (e) {
+      console.error('Failed to clear storage:', e);
+    }
+
+    // 4. Hard redirect to home to flush memory and guarantees routing out of protected zones
+    window.location.href = '/';
   };
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
     if (!user) return { error: { message: 'No user logged in' } };
 
+    const merged = {
+      id: user.id,
+      email: user.email ?? profile?.email ?? null,
+      full_name:
+        updates.full_name !== undefined ? updates.full_name : profile?.full_name ?? null,
+      github_username:
+        updates.github_username !== undefined ? updates.github_username : profile?.github_username ?? null,
+      avatar_url:
+        updates.avatar_url !== undefined ? updates.avatar_url : profile?.avatar_url ?? null,
+      updated_at: new Date().toISOString(),
+    };
+
     const { data, error } = await supabase
       .from('user_profiles')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', user.id)
+      .upsert(merged, { onConflict: 'id' })
       .select()
       .single();
 
-    if (!error && data) {
-      setProfile(data);
+    if (error) {
+      console.error('[AuthContext] updateProfile:', error.message, error.code, error.details);
+      return {
+        error: {
+          message:
+            error.code === '42501'
+              ? 'Permission denied — check Row Level Security policies for user_profiles in Supabase.'
+              : error.message || 'Failed to save profile',
+        },
+      };
     }
 
-    return { error };
+    if (data) setProfile(data);
+    return { error: null };
   };
 
   return (
@@ -464,6 +508,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {

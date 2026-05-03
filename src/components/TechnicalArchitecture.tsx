@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useInView } from 'framer-motion';
 import { useRef } from 'react';
-import { Cpu, Eye, Ear, Brain, Database, Globe, Shield, Zap } from 'lucide-react';
+import { Cpu, Eye, Ear, Brain, Database, Globe } from 'lucide-react';
 
 export default function TechnicalArchitecture() {
   const ref = useRef(null);
@@ -82,7 +82,7 @@ export default function TechnicalArchitecture() {
   ];
 
   return (
-    <section id="technical-architecture" className="py-20 sm:py-32 bg-gray-900 relative overflow-hidden">
+    <section id="technical-architecture" className="py-20 sm:py-32 bg-white/5 backdrop-blur-md relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,_var(--tw-gradient-stops))] from-violet-500/10 via-transparent to-transparent" />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10" ref={ref}>
