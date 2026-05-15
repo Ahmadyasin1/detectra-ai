@@ -9,15 +9,15 @@ interface SEOProps {
 }
 
 export default function SEO({
-  title = 'Detecra AI - Empowering the World with Intelligent Detection',
-  description = 'Advanced AI detection systems powered by Nexariza AI. Supervision: Phases 1-2 by Dr. Usman Aamer and Phases 3-4 by Dr. Yasin Nasir at University of Central Punjab. Transforming industries with cutting-edge artificial intelligence.',
+  title = 'Detectra AI - Multimodal Video Intelligence Platform',
+  description = 'Detectra AI helps security teams analyze surveillance footage with multimodal AI: incident detection, multilingual transcription, logo recognition, and premium investigation reports.',
   keywords = [
     'AI detection',
     'artificial intelligence',
     'computer vision',
     'machine learning',
     'Nexariza AI',
-    'Detecra AI',
+    'Detectra AI',
     'University of Central Punjab',
     'FOIT',
     'Dr. Usman Aamer',
@@ -30,7 +30,7 @@ export default function SEO({
     'real-time processing'
   ],
   image = '/og-image.jpg',
-  url = typeof window !== 'undefined' ? window.location.href : 'https://detecra.ai',
+  url = typeof window !== 'undefined' ? window.location.href : 'https://detectra.ai',
 }: SEOProps) {
   return (
     <Helmet>
@@ -38,7 +38,7 @@ export default function SEO({
       <title>{title}</title>
       <meta name="description" content={description} />
       <meta name="keywords" content={keywords.join(', ')} />
-      <meta name="author" content="Detecra AI by Nexariza AI" />
+      <meta name="author" content="Detectra AI by Nexariza AI" />
       <meta name="robots" content="index, follow" />
       
       {/* Open Graph Tags */}
@@ -47,7 +47,7 @@ export default function SEO({
       <meta property="og:image" content={image} />
       <meta property="og:url" content={url} />
       <meta property="og:type" content="website" />
-      <meta property="og:site_name" content="Detecra AI" />
+      <meta property="og:site_name" content="Detectra AI" />
       
       {/* Twitter Card Tags */}
       <meta name="twitter:card" content="summary_large_image" />
@@ -75,10 +75,10 @@ export default function SEO({
         {JSON.stringify({
           "@context": "https://schema.org",
           "@type": "Organization",
-          "name": "Detecra AI",
-          "alternateName": "Detecra AI by Nexariza AI",
-          "url": "https://detecra.ai",
-          "logo": "https://detecra.ai/logo.png",
+          "name": "Detectra AI",
+          "alternateName": "Detectra AI by Nexariza AI",
+          "url": "https://detectra.ai",
+          "logo": "https://detectra.ai/logo.png",
           "description": description,
           "foundingDate": "2023",
           "founder": {
@@ -107,9 +107,9 @@ export default function SEO({
             }
           ],
           "sameAs": [
-            "https://linkedin.com/company/detecra-ai",
-            "https://github.com/detecra-ai",
-            "https://twitter.com/detecra_ai"
+            "https://linkedin.com/company/detectra-ai",
+            "https://github.com/Ahmadyasin1",
+            "https://twitter.com/detectra_ai"
           ],
           "contactPoint": {
             "@type": "ContactPoint",

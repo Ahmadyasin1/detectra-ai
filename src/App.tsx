@@ -1,7 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import Layout from './components/Layout';
 import Home from './pages/Home';
-import Project from './pages/Project';
 import FYPProject from './pages/FYPProject';
 import Timeline from './pages/Timeline';
 import ResearchLiterature from './pages/ResearchLiterature';
@@ -22,8 +21,19 @@ import JobResults from './pages/JobResults';
 import NotFound from './pages/NotFound';
 import { useAuth } from './contexts/AuthContext';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+/**
+ * Generic protected route — redirects to /signin when no user.
+ * `allowGuest` lets routes opt-in to letting unauthenticated users in when
+ * Supabase isn't configured (so the analyzer still works in dev/demo mode).
+ */
+function ProtectedRoute({
+  children,
+  allowGuest = false,
+}: {
+  children: React.ReactNode;
+  allowGuest?: boolean;
+}) {
+  const { user, loading, isGuest } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -38,7 +48,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    // Save the current location so we can redirect back after sign-in
+    if (allowGuest && isGuest) return <>{children}</>;
     return <Navigate to="/signin" state={{ from: location }} replace />;
   }
 
@@ -62,7 +72,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
-          <Route path="project" element={<Project />} />
+          <Route path="project" element={<Navigate to="/fyp-project" replace />} />
           <Route path="fyp-project" element={<FYPProject />} />
           <Route path="timeline" element={<Timeline />} />
           <Route path="research" element={<ResearchLiterature />} />
@@ -87,7 +97,7 @@ function App() {
           <Route
             path="analyze"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowGuest>
                 <Dashboard />
               </ProtectedRoute>
             }
@@ -95,7 +105,7 @@ function App() {
           <Route
             path="analyze/progress/:jobId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowGuest>
                 <AnalyzeJob />
               </ProtectedRoute>
             }
@@ -103,7 +113,7 @@ function App() {
           <Route
             path="analyze/results/:jobId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowGuest>
                 <JobResults />
               </ProtectedRoute>
             }

@@ -560,8 +560,8 @@ export default function JobResults() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent pt-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="min-h-screen bg-transparent pt-20 sm:pt-24 pb-[env(safe-area-inset-bottom)] overflow-x-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-5 sm:space-y-6 min-w-0">
 
         {/* ── Breadcrumb + exports ── */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -600,7 +600,7 @@ export default function JobResults() {
 
             {/* Video info + narrative + key findings */}
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold text-white truncate">{videoName}</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-white truncate">{videoName}</h1>
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-gray-400 text-sm">
                 <span>{fmtDuration(duration_s)}</span>
                 <span>·</span>
@@ -628,7 +628,7 @@ export default function JobResults() {
             </div>
 
             {/* Severity breakdown */}
-            <div className="flex-shrink-0 bg-black/25 rounded-xl p-4 min-w-44 border border-white/5">
+            <div className="flex-shrink-0 w-full md:w-auto bg-black/25 rounded-xl p-4 md:min-w-44 border border-white/5">
               <p className="text-gray-500 text-xs uppercase tracking-widest mb-3">Severity</p>
               {(['critical', 'high', 'medium', 'low'] as const).map(sev => {
                 const cnt = severity_counts?.[sev] ?? 0;
@@ -639,6 +639,52 @@ export default function JobResults() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ── Trust & Validation ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.03 }}
+          className="rounded-2xl border border-white/10 bg-white/5 p-5"
+        >
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-white font-semibold flex items-center gap-2">
+                <Shield className="w-4 h-4 text-cyan-400" />
+                Trust & Validation Signals
+              </h2>
+              <p className="text-gray-400 text-sm mt-1 max-w-3xl">
+                Results are generated from multi-source evidence. Review confidence, severity, and correlated events before taking action.
+              </p>
+            </div>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${severityBadgeClass(risk_level)}`}>
+              Overall Risk: {risk_level.toUpperCase()}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <p className="text-xs text-gray-500 uppercase tracking-wider">Fusion corroboration</p>
+              <p className="text-lg font-bold text-white mt-1">{alertFusions.length}/{fusion_insights.length || 1}</p>
+              <p className="text-xs text-gray-400 mt-1">Alert windows with multimodal agreement.</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <p className="text-xs text-gray-500 uppercase tracking-wider">Speech evidence</p>
+              <p className="text-lg font-bold text-white mt-1">{cleanSpeech.length} segments</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {detected_languages.length > 0
+                  ? `${detected_languages.length} language profile(s) detected`
+                  : 'No language profile detected'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <p className="text-xs text-gray-500 uppercase tracking-wider">Identity stability</p>
+              <p className="text-lg font-bold text-white mt-1">{distinctPersonCount(result)} people</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Tracker fragments: {trackFragmentCount(result)} · lower fragmentation improves trust.
+              </p>
             </div>
           </div>
         </motion.div>

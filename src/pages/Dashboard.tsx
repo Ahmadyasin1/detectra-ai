@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/exhaustive-deps */
-/* eslint-disable no-empty */
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
@@ -11,13 +10,21 @@ import {
 } from 'lucide-react';
 import Chart from 'chart.js/auto';
 import {
-  submitVideo, submitVideoFromUrl, checkHealth, getJobResult, listMyJobs,
-  getReportUrl, getVideoUrl, distinctPersonCount,
+  submitVideo, submitVideoFromUrl, checkHealth, getJobResult, listMyJobs, deleteJob,
+  getReportUrl, getVideoUrl, distinctPersonCount, apiUrl, getLiveWsUrl,
   type JobStatus, type AnalysisResult, type ApiHealth,
 } from '../lib/detectraApi';
 import './Dashboard.css';
-import { createVideoUpload, getUserVideoUploads, getVideoUploadByJobId, deleteVideoUpload, uploadVideoFileToBucket } from '../lib/supabaseDb';
+import {
+  createVideoUpload,
+  getUserVideoUploads,
+  getVideoUploadByJobId,
+  deleteVideoUpload,
+  uploadVideoFileToBucket,
+  updateVideoUpload,
+} from '../lib/supabaseDb';
 import { mergeJobsFromApiAndDatabase, jobsFromUploadsOnly } from '../lib/jobListMerge';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 // Reusing global styling via style tag
 const DashboardStyles = () => (
@@ -96,8 +103,6 @@ const DashboardStyles = () => (
   `}</style>
 );
 
-const API_URL = window.location.origin;
-
 const fmtTime = (s: number) => {
   const mins = Math.floor(s / 60);
   const secs = Math.floor(s % 60);
@@ -123,6 +128,7 @@ export default function Dashboard() {
   // Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [bucketWarning, setBucketWarning] = useState<string | null>(null);
   
   // Live State
   const [isLive, setIsLive] = useState(false);
@@ -165,15 +171,15 @@ export default function Dashboard() {
   const loadJobs = async () => {
     try {
       const list = await listMyJobs();
-      if (user) {
-        const uploads = await getUserVideoUploads(user.id);
+      if (user && isSupabaseConfigured) {
+        const uploads = await getUserVideoUploads(user.id).catch(() => []);
         setJobs(mergeJobsFromApiAndDatabase(list, uploads, user.id));
       } else {
         setJobs(list);
       }
     } catch (err) {
       console.warn('Jobs list fetch failed', err);
-      if (user) {
+      if (user && isSupabaseConfigured) {
         try {
           const uploads = await getUserVideoUploads(user.id);
           setJobs(jobsFromUploadsOnly(uploads, user.id));
@@ -206,31 +212,45 @@ export default function Dashboard() {
     setIsUploading(true);
     
     try {
-      let uploadResult = null;
-      if (user) {
+      let uploadResult: { storagePath: string; publicUrl: string | null; error: string | null } | null = null;
+      if (user && isSupabaseConfigured) {
         uploadResult = await uploadVideoFileToBucket(selectedFile);
-        if (uploadResult.error) {
-          console.warn('Supabase bucket upload failed:', uploadResult.error);
-        }
       }
 
+      // Only use the bucket-routed path when the upload actually succeeded.
+      // On any error we silently fall back to direct multipart upload — this
+      // avoids the "Bucket not found / object missing" cascade where the
+      // backend later fails to download a path that was never created.
+      const bucketOk = !!uploadResult && !uploadResult.error;
+
       let res;
-      if (uploadResult?.publicUrl) {
+      if (bucketOk && uploadResult?.publicUrl) {
         res = await submitVideoFromUrl(uploadResult.publicUrl, null, null, selectedFile.name || 'upload.mp4');
-      } else if (uploadResult?.storagePath) {
+      } else if (bucketOk && uploadResult?.storagePath) {
         res = await submitVideoFromUrl(null, uploadResult.storagePath, null, selectedFile.name || 'upload.mp4');
       } else {
+        if (uploadResult?.error && uploadResult.error !== 'guest_mode') {
+          console.warn(
+            `[Dashboard] Supabase bucket upload failed (${uploadResult.error}). Falling back to direct multipart upload.`,
+          );
+          if (/bucket.*not.*found/i.test(uploadResult.error)) {
+            setBucketWarning(
+              `Storage bucket "${import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'videos'}" not found in Supabase. ` +
+                'Create it in Supabase Dashboard → Storage, or set VITE_SUPABASE_STORAGE_BUCKET to match an existing bucket. ' +
+                'Falling back to direct upload for now.',
+            );
+          }
+        }
         res = await submitVideo(selectedFile);
       }
 
-      if (user) {
+      if (user && isSupabaseConfigured) {
         await createVideoUpload(user.id, res.job_id, selectedFile.name || res.video_name).catch(console.warn);
       }
-      // Prefer the dedicated progress page (more detailed + resilient).
       clearFile();
       navigate(`/analyze/progress/${res.job_id}`);
     } catch (err: any) {
-      alert(`Critical System Error: ${err.message}`);
+      alert(`Upload failed: ${err?.message ?? 'Unknown error'}`);
     } finally {
       setIsUploading(false);
     }
@@ -260,17 +280,15 @@ export default function Dashboard() {
       const result = await getJobResult(jobId);
       applyResultToDashboard(result);
 
-      if (user) {
-        import('../lib/supabaseDb').then(({ updateVideoUpload }) => {
-          updateVideoUpload(user.id, jobId, {
-            status: 'completed',
-            analysis_results: result,
-          }).catch(console.warn);
-        });
+      if (user && isSupabaseConfigured) {
+        updateVideoUpload(user.id, jobId, {
+          status: 'completed',
+          analysis_results: result,
+        }).catch(console.warn);
       }
       loadJobs();
     } catch {
-      if (user) {
+      if (user && isSupabaseConfigured) {
         const row = await getVideoUploadByJobId(user.id, jobId).catch(() => null);
         if (row?.analysis_results) {
           applyResultToDashboard(row.analysis_results);
@@ -366,12 +384,20 @@ export default function Dashboard() {
 
   const toggleLive = async () => {
     if (isLive) {
-      await fetch(`${API_URL}/api/live/stop`, { method: 'DELETE' }).catch(console.warn);
+      await fetch(apiUrl('/api/live/stop'), { method: 'DELETE' }).catch(console.warn);
       stopLive();
     } else {
-      const res = await fetch(`${API_URL}/api/live/start?source=${encodeURIComponent(streamSrc)}`, { method: 'POST' }).catch(() => null);
-      if (res && res.ok) startLive();
-      else alert('Failed to synchronize with live stream processor.');
+      try {
+        const res = await fetch(
+          apiUrl(`/api/live/start?source=${encodeURIComponent(streamSrc)}`),
+          { method: 'POST' },
+        );
+        if (res.ok) startLive();
+        else alert(`Live stream failed (HTTP ${res.status}). Check the backend.`);
+      } catch (err) {
+        console.error('Live start failed:', err);
+        alert('Failed to reach live-stream processor — is the backend running?');
+      }
     }
   };
 
@@ -382,25 +408,44 @@ export default function Dashboard() {
 
   const stopLive = () => {
     setIsLive(false);
-    if (liveWsRef.current) liveWsRef.current.close();
+    if (liveWsRef.current) {
+      try { liveWsRef.current.close(); } catch { /* noop */ }
+      liveWsRef.current = null;
+    }
   };
 
   const connectLiveSocket = () => {
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    liveWsRef.current = new WebSocket(`${proto}//${window.location.host}/ws/live`);
-    liveWsRef.current.onmessage = (evt) => {
-      const msg = JSON.parse(evt.data);
-      if (msg.type === 'frame') {
-        if (msg.frame_b64) setLiveCanvasSrc(`data:image/jpeg;base64,${msg.frame_b64}`);
-        setLivePersons(msg.persons || 0);
-        setLiveAction(msg.action || 'IDLE');
-        if (msg.alerts && msg.alerts.length > 0) {
-          msg.alerts.forEach((a: any) => pushAlert(a, msg.ts));
+    try {
+      const ws = new WebSocket(getLiveWsUrl());
+      liveWsRef.current = ws;
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          if (msg.type === 'frame') {
+            if (msg.frame_b64) setLiveCanvasSrc(`data:image/jpeg;base64,${msg.frame_b64}`);
+            setLivePersons(msg.persons || 0);
+            setLiveAction(msg.action || 'IDLE');
+            if (Array.isArray(msg.alerts) && msg.alerts.length > 0) {
+              msg.alerts.forEach((a: any) => pushAlert(a, msg.ts));
+            }
+          } else if (msg.type === 'live_stopped') {
+            stopLive();
+          }
+        } catch (err) {
+          console.warn('[Live] malformed frame:', err);
         }
-      } else if (msg.type === 'live_stopped') {
-        stopLive();
-      }
-    };
+      };
+      ws.onerror = (err) => console.warn('[Live] WebSocket error:', err);
+      ws.onclose = () => {
+        if (liveWsRef.current === ws) {
+          liveWsRef.current = null;
+          setIsLive(false);
+        }
+      };
+    } catch (err) {
+      console.error('[Live] failed to open WebSocket:', err);
+      stopLive();
+    }
   };
 
   const handleDownloadReport = () => {
@@ -422,9 +467,11 @@ export default function Dashboard() {
     const ok = confirm('Delete this analysis job (including report/video outputs)?');
     if (!ok) return;
     try {
-      await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
-    } catch {}
-    if (user) {
+      await deleteJob(jobId);
+    } catch (err) {
+      console.warn('Backend job delete failed:', err);
+    }
+    if (user && isSupabaseConfigured) {
       await deleteVideoUpload(user.id, jobId).catch(() => {});
     }
     if (currentJobId === jobId) setCurrentJobId(null);
@@ -457,6 +504,28 @@ export default function Dashboard() {
     <>
       <DashboardStyles />
       <div className="min-h-screen flex flex-col font-[Inter] bg-[#05070a] text-[#e6edf3] overflow-x-hidden pt-20 md:pt-24">
+        {!user && !isSupabaseConfigured && (
+          <div className="px-6 pb-2">
+            <div className="panel soft-ring rounded-2xl px-4 py-2.5 border border-amber-500/30 bg-amber-500/5 flex items-center justify-between gap-3">
+              <span className="text-[11px] text-amber-200/90">
+                Guest mode — account & history features are off. Add <code className="font-mono">VITE_SUPABASE_URL</code> &amp; <code className="font-mono">VITE_SUPABASE_ANON_KEY</code> to <code className="font-mono">.env</code> to enable them. The AI pipeline still works.
+              </span>
+            </div>
+          </div>
+        )}
+        {bucketWarning && (
+          <div className="px-6 pb-2">
+            <div className="panel soft-ring rounded-2xl px-4 py-2.5 border border-orange-500/30 bg-orange-500/5 flex items-start justify-between gap-3">
+              <span className="text-[11px] text-orange-200/90 leading-relaxed">{bucketWarning}</span>
+              <button
+                onClick={() => setBucketWarning(null)}
+                className="text-orange-300/70 hover:text-orange-200 text-[10px] font-bold uppercase tracking-widest"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
         <div className="px-6 pb-4">
           <div className="panel soft-ring rounded-2xl px-4 py-3 border border-white/10 flex items-center justify-between">
             <div className="flex items-center gap-3">

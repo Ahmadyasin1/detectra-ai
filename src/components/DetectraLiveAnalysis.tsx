@@ -92,7 +92,7 @@ function ResultSummary({ result, jobId }: { result: AnalysisResult; jobId: strin
       </div>
 
       {/* Quick metrics */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label: 'Individuals',  value: distinctPersonCount(result), color: 'text-cyan-400' },
           { label: 'Events',   value: surveillance_events.length,  color: 'text-red-400' },

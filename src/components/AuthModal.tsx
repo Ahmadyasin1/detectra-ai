@@ -133,18 +133,18 @@ export default function AuthModal() {
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-transparent/80 backdrop-blur-md">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 bg-black/80 backdrop-blur-md">
           <motion.div 
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
-            className="absolute inset-0 max-w-md w-full m-auto h-fit my-auto"
+            className="w-full max-w-md max-h-[min(92vh,720px)] sm:my-auto overflow-y-auto overscroll-contain rounded-t-3xl sm:rounded-3xl"
           >
-            <div className="relative bg-[#0d1117] rounded-3xl shadow-[0_0_50px_rgba(34,211,238,0.15)] border border-white/10 p-8 overflow-hidden">
+            <div className="relative bg-[#0d1117] rounded-t-3xl sm:rounded-3xl shadow-[0_0_50px_rgba(34,211,238,0.15)] border border-white/10 p-5 sm:p-8 overflow-hidden pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               
               {/* Background ambient lighting */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120%] h-[150px] bg-gradient-to-b from-cyan-500/20 to-transparent pointer-events-none rounded-t-[100%]" />
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-lg h-[120px] sm:h-[150px] bg-gradient-to-b from-cyan-500/20 to-transparent pointer-events-none rounded-t-[100%]" />
               
               <button onClick={close} className="absolute right-5 top-5 p-1.5 rounded-full bg-white/10 text-gray-400 hover:text-white transition-colors z-10 border border-white/20/50">
                 <X className="w-4 h-4" />
@@ -162,7 +162,7 @@ export default function AuthModal() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mb-5 relative z-10">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5 relative z-10">
                 <button type="button" onClick={() => handleSocial('google')} disabled={!!socialLoading || loading}
                   className="flex items-center justify-center gap-2 py-2.5 bg-white/10 hover:bg-gray-700 border border-white/20 hover:border-gray-500 rounded-xl text-gray-300 hover:text-white text-xs font-semibold transition-all">
                   {socialLoading === 'google' 

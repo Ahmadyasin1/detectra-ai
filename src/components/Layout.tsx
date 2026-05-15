@@ -9,7 +9,7 @@ import AuthModal from './AuthModal';
 
 export default function Layout() {
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white overflow-x-hidden">
       <PerformanceOptimizer />
       <ParticleBackground />
       {/* Site-wide ambient glow — matches Home / Hero treatment */}
@@ -20,7 +20,7 @@ export default function Layout() {
       <CursorTrail />
       <AuthModal />
       <Navbar />
-      <main className="relative z-10">
+      <main className="relative z-10 min-w-0 w-full">
         <Outlet />
       </main>
       <Footer />

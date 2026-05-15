@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, isSupabaseConfigured } from './supabase';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
@@ -172,7 +172,15 @@ export interface JobAskResponse {
 
 // --- HTTP client --------------------------------------------------------------
 
-const API_URL = ''; // Proxied via Vite dev server --------------------------------------------------------------
+// Empty string = same-origin (Vite dev proxy / nginx). Set VITE_API_URL for split deployments.
+export const API_URL: string =
+  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+
+/** Build an absolute API URL, useful for non-JSON requests (downloads, live stream, etc.). */
+export function apiUrl(path: string): string {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  return `${API_URL}${p}`;
+}
 
 interface RetryOptions {
   maxRetries?: number;
@@ -220,18 +228,14 @@ function calculateDelay(
 }
 
 async function authHeader(): Promise<Record<string, string>> {
+  if (!isSupabaseConfigured) return {};
   try {
-    const { data: sessionData } = await supabase.auth.getSession() as any;
-    let token = sessionData?.session?.access_token;
+    const { data: sessionData } = (await supabase.auth.getSession()) as any;
+    let token: string | undefined = sessionData?.session?.access_token;
 
     if (!token) {
-      const { data: refreshData } = await supabase.auth.refreshSession() as any;
+      const { data: refreshData } = (await supabase.auth.refreshSession()) as any;
       token = refreshData?.session?.access_token || token;
-    }
-
-    if (!token) {
-      const { data: fallbackSessionData } = await supabase.auth.getSession() as any;
-      token = fallbackSessionData?.session?.access_token || token;
     }
 
     return token ? { Authorization: `Bearer ${token}` } : {};
@@ -421,20 +425,37 @@ export function deleteJob(jobId: string): Promise<void> {
 }
 
 export function getWsUrl(jobId: string): string {
+  // If a custom API host is configured (e.g. split frontend/backend deployment),
+  // build the ws:// URL from it. Otherwise default to same-origin (works with
+  // both Vite dev proxy and nginx reverse proxy).
+  if (API_URL && /^https?:\/\//i.test(API_URL)) {
+    const wsBase = API_URL.replace(/^http/i, 'ws');
+    return `${wsBase}/ws/${jobId}`;
+  }
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${wsProtocol}//${window.location.host}/ws/${jobId}`;
 }
 
+/** Live-stream WebSocket URL (same routing rules as getWsUrl). */
+export function getLiveWsUrl(): string {
+  if (API_URL && /^https?:\/\//i.test(API_URL)) {
+    const wsBase = API_URL.replace(/^http/i, 'ws');
+    return `${wsBase}/ws/live`;
+  }
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${wsProtocol}//${window.location.host}/ws/live`;
+}
+
 export function getRagJsonUrl(jobId: string): string {
-  return `/api/jobs/${jobId}/rag`;
+  return apiUrl(`/api/jobs/${jobId}/rag`);
 }
 
 export function getReportUrl(jobId: string): string {
-  return `/api/jobs/${jobId}/report`;
+  return apiUrl(`/api/jobs/${jobId}/report`);
 }
 
 export function getVideoUrl(jobId: string): string {
-  return `/api/jobs/${jobId}/video`;
+  return apiUrl(`/api/jobs/${jobId}/video`);
 }
 
 export function getTranslatedTranscript(
