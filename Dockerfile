@@ -31,6 +31,11 @@ RUN npm run build
 # ── Stage 2: Serve ────────────────────────────────────────────────────────────
 FROM nginx:1.25-alpine AS runner
 
+LABEL org.opencontainers.image.title="Detectra AI Frontend"
+LABEL org.opencontainers.image.description="Production UI from detectra-ai-main (Vite + React + Nginx)"
+LABEL com.detectra.service="web-ui"
+LABEL com.detectra.source="detectra-ai-main"
+
 # Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf
 
