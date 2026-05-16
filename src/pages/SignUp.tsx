@@ -5,6 +5,7 @@ import {
   Mail, Lock, User, UserPlus, AlertCircle, CheckCircle,
   Eye, EyeOff, Check, Github,
 } from 'lucide-react';
+import { DetectraLogoMark } from '../components/DetectraLogo';
 import { useAuth } from '../contexts/AuthContext';
 import SEO from '../components/SEO';
 
@@ -88,9 +89,7 @@ export default function SignUp() {
 
             {/* Header */}
             <div className="text-center mb-7">
-              <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-cyan-500/25">
-                <span className="text-white font-bold text-2xl">D</span>
-              </div>
+              <DetectraLogoMark variant="wordmark" size="lg" className="mx-auto mb-5" />
               <h1 className="text-2xl font-bold text-white mb-1">Create account</h1>
               <p className="text-gray-500 text-sm">Join Detectra AI — free forever</p>
             </div>

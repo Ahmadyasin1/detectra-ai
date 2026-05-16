@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Send, Bot, User, Sparkles, RefreshCw, ChevronRight,
+  Send, User, RefreshCw, ChevronRight,
   AlertTriangle, Loader2, Info,
 } from 'lucide-react';
+import { DetectraLogoMark } from './DetectraLogo';
 import { chatWithVideo, buildVideoContext, ChatMessage } from '../lib/hfApi';
 import { askJobQuestion, type AnalysisResult } from '../lib/detectraApi';
 
@@ -50,9 +51,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}
     >
       {!isUser && (
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg shadow-purple-500/25">
-          <Bot className="w-4 h-4 text-white" />
-        </div>
+        <DetectraLogoMark size="xs" className="mt-0.5 flex-shrink-0" />
       )}
 
       <div className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
@@ -138,9 +137,7 @@ export default function AIAssistant({ result, jobId }: { result: AnalysisResult;
 
       {/* ── Header ── */}
       <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/10 bg-white/5 backdrop-blur-md flex-shrink-0">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg shadow-purple-500/25 flex-shrink-0">
-          <Sparkles className="w-[18px] h-[18px] text-white" />
-        </div>
+        <DetectraLogoMark size="xs" className="flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-white font-semibold text-sm leading-none">AI Video Assistant</p>
           <p className="text-gray-500 text-xs mt-0.5">
@@ -203,9 +200,7 @@ export default function AIAssistant({ result, jobId }: { result: AnalysisResult;
 
             {/* Bot greeting */}
             <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg shadow-purple-500/25">
-                <Bot className="w-4 h-4 text-white" />
-              </div>
+              <DetectraLogoMark size="xs" className="mt-0.5 flex-shrink-0" />
               <div className="bg-white/10 border border-white/20/60 rounded-2xl rounded-tl-sm px-4 py-3 max-w-sm">
                 <p className="text-gray-200 text-sm leading-relaxed">
                   I've analyzed <span className="text-cyan-400 font-semibold">{result.video_name}</span> in full.

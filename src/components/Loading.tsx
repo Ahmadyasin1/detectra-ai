@@ -1,4 +1,6 @@
 import { motion } from 'framer-motion';
+import { DetectraLogoMark } from './DetectraLogo';
+import { DETECTRA_BRAND_NAME } from '../constants/branding';
 
 export default function Loading() {
   return (
@@ -8,22 +10,23 @@ export default function Loading() {
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ duration: 0.5 }}
-          className="w-20 h-20 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6"
+          className="relative mx-auto mb-6"
         >
+          <DetectraLogoMark size="xl" className="mx-auto" />
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-            className="w-10 h-10 border-3 border-white border-t-transparent rounded-full"
+            className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-8 h-8 border-2 border-cyan-400/60 border-t-transparent rounded-full"
           />
         </motion.div>
-        
+
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
           className="text-2xl font-bold text-white mb-2"
         >
-          Detecra AI
+          {DETECTRA_BRAND_NAME}
         </motion.h2>
         
         <motion.p

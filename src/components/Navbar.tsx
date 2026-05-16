@@ -3,6 +3,7 @@ import { Menu, X, User, LogOut, ChevronDown, Network, GitBranch, Target, Briefca
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import DetectraLogo from './DetectraLogo';
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled]         = useState(false);
@@ -80,20 +81,12 @@ export default function Navbar() {
   return (
     <motion.nav initial={{ y: -100 }} animate={{ y: 0 }} className={navClass}>
       <div className="w-full px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-16 min-h-16">
 
-          {/* Logo */}
-          <Link to="/">
-            <motion.div whileHover={{ scale: 1.02 }} className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/25">
-                <span className="text-white font-bold text-base">D</span>
-              </div>
-              <div className="flex flex-col leading-none">
-                <span className="text-white font-bold text-lg tracking-tight">Detectra AI</span>
-                <span className="hidden sm:block text-gray-500 text-xs font-medium">trusted multimodal intelligence</span>
-              </div>
-            </motion.div>
-          </Link>
+          {/* Logo — same full wordmark as Sign Up (icon + DETECTRA AI) */}
+          <motion.div whileHover={{ scale: 1.01 }} className="shrink-0 py-0.5">
+            <DetectraLogo variant="wordmark" showText={false} size="sm" linkToHome />
+          </motion.div>
 
           {/* Desktop nav links */}
           <div className="hidden lg:flex items-center gap-0.5">
@@ -304,3 +297,4 @@ export default function Navbar() {
     </motion.nav>
   );
 }
+

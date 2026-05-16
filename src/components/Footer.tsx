@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Mail, Github, Linkedin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import DetectraLogo from './DetectraLogo';
 
 export default function Footer() {
   const { user } = useAuth();
@@ -16,12 +17,13 @@ export default function Footer() {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 items-start">
           <div className="md:col-span-2">
-            <Link to="/" className="inline-flex items-center gap-3 mb-4 group">
-              <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:opacity-90 transition-opacity">
-                <span className="text-white font-bold text-lg">D</span>
-              </div>
-              <span className="text-xl font-bold text-white tracking-wide">Detectra AI</span>
-            </Link>
+            <DetectraLogo
+              variant="wordmark"
+              showText={false}
+              size="md"
+              linkToHome
+              className="mb-4 hover:opacity-90 transition-opacity"
+            />
             <p className="text-sm text-gray-500 max-w-xl leading-relaxed">
               Professional multimodal video intelligence for security teams: faster investigations, evidence-backed results, and risk-prioritized reporting.
             </p>

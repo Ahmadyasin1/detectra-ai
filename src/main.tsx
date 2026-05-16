@@ -13,6 +13,13 @@ if (!rootElement) {
   throw new Error('Root element not found');
 }
 
+// Stale service workers can serve broken JS after a Vite compile error (white screen).
+if (import.meta.env.DEV && 'serviceWorker' in navigator) {
+  void navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((r) => void r.unregister());
+  });
+}
+
 try {
   createRoot(rootElement).render(
     <StrictMode>

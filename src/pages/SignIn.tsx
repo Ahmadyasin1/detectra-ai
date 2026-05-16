@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mail, Lock, LogIn, AlertCircle, Eye, EyeOff, Github } from 'lucide-react';
+import { DetectraLogoMark } from '../components/DetectraLogo';
 import { useAuth } from '../contexts/AuthContext';
 import SEO from '../components/SEO';
 
@@ -105,9 +106,7 @@ export default function SignIn() {
 
             {/* Header */}
             <div className="text-center mb-8">
-              <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-cyan-500/25">
-                <span className="text-white font-bold text-2xl">D</span>
-              </div>
+              <DetectraLogoMark variant="wordmark" size="lg" className="mx-auto mb-5" />
               <h1 className="text-2xl font-bold text-white mb-1">Welcome back</h1>
               <p className="text-gray-500 text-sm">Sign in to your Detectra AI account</p>
             </div>

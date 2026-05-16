@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Home, ArrowLeft } from 'lucide-react';
+import { DetectraLogoMark } from '../components/DetectraLogo';
 
 export default function NotFound() {
   return (
@@ -23,10 +24,7 @@ export default function NotFound() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_60%,rgba(34,211,238,0.12),transparent_70%)] blur-2xl pointer-events-none" />
         </div>
 
-        {/* Logo mark */}
-        <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-xl shadow-cyan-500/20">
-          <span className="text-white font-bold text-xl">D</span>
-        </div>
+        <DetectraLogoMark size="lg" className="mx-auto mb-5" />
 
         <h1 className="text-2xl font-bold text-white mb-3">Page not found</h1>
         <p className="text-gray-500 text-sm leading-relaxed mb-8">

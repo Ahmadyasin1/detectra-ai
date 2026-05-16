@@ -65,10 +65,8 @@ export default function SEO({
       <link rel="canonical" href={url} />
       
       {/* Favicon */}
-      <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-      <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-      <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-      <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+      <link rel="icon" type="image/png" href="/detectra-logo-mark.png" />
+      <link rel="apple-touch-icon" href="/detectra-logo-mark.png" />
       
       {/* Structured Data */}
       <script type="application/ld+json">
@@ -78,7 +76,7 @@ export default function SEO({
           "name": "Detectra AI",
           "alternateName": "Detectra AI by Nexariza AI",
           "url": "https://detectra.ai",
-          "logo": "https://detectra.ai/logo.png",
+          "logo": "/detectra-logo-mark.png",
           "description": description,
           "foundingDate": "2023",
           "founder": {

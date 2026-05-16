@@ -67,17 +67,17 @@ export default function Contact() {
     {
       name:  'Ahmad Yasin',
       role:  'AI Engineer · Lead Developer',
-      email: 'mianahmadyasin3@gmail.com',
+      email: 'ahmadyasin.info@gmail.com',
     },
     {
       name:  'Eman Sarfraz',
       role:  'AI Engineer · Backend & Pipeline',
-      email: 'emansarfraz@student.ucp.edu.pk',
+      email: 'emansarfraz.tech@gmail.com',
     },
     {
       name:  'Abdul Rehman',
       role:  'AI Engineer · Frontend & Integration',
-      email: 'abdulrehman@student.ucp.edu.pk',
+      email: 'abdulrehman1.info@gmail.com',
     },
     {
       name:  'Dr. Usman Aamer',

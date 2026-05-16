@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, Zap, Target } from 'lucide-react';
+import { DetectraLogoMark } from './DetectraLogo';
+import { DETECTRA_BRAND_NAME } from '../constants/branding';
 
 export default function AppLoader() {
   const [isLoading, setIsLoading] = useState(true);
@@ -27,22 +29,23 @@ export default function AppLoader() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ duration: 0.5 }}
-              className="w-24 h-24 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-cyan-500/50"
+              className="relative mx-auto mb-8"
             >
+              <DetectraLogoMark variant="wordmark" size="2xl" className="mx-auto" />
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                className="w-12 h-12 border-4 border-white border-t-transparent rounded-full"
+                className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-10 h-10 border-2 border-cyan-400/60 border-t-transparent rounded-full"
               />
             </motion.div>
-            
+
             <motion.h2
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
               className="text-3xl font-bold text-white mb-2"
             >
-              Detecra AI
+              {DETECTRA_BRAND_NAME}
             </motion.h2>
             
             <motion.p

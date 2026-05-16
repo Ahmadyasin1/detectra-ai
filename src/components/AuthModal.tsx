@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, LogIn, AlertCircle, Eye, EyeOff, Github, User, UserPlus, CheckCircle, Check, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { DetectraLogoMark } from './DetectraLogo';
 
 export default function AuthModal() {
   const [isOpen, setIsOpen] = useState(false);
@@ -151,9 +152,7 @@ export default function AuthModal() {
               </button>
 
               <div className="text-center mb-6 relative z-10">
-                <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-cyan-500/30">
-                  <span className="text-white font-extrabold text-xl font-mono">D</span>
-                </div>
+                <DetectraLogoMark variant="wordmark" size="md" className="mx-auto mb-4" />
                 <h2 className="text-2xl font-bold tracking-tight text-white mb-1">
                   {mode === 'signin' ? 'Welcome Back' : 'Create Account'}
                 </h2>

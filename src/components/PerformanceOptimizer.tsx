@@ -42,12 +42,24 @@ export default function PerformanceOptimizer() {
       }
     };
 
-    // Implement service worker for caching
-    const registerServiceWorker = () => {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js')
-          .then(() => {})
-          .catch(() => {});
+    // Service workers break Vite HMR in dev (cached broken bundles → white screen).
+    const manageServiceWorker = async () => {
+      if (!('serviceWorker' in navigator)) return;
+
+      if (import.meta.env.DEV) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((r) => r.unregister()));
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        }
+        return;
+      }
+
+      try {
+        await navigator.serviceWorker.register('/sw.js');
+      } catch {
+        /* optional in production */
       }
     };
 
@@ -104,7 +116,7 @@ export default function PerformanceOptimizer() {
     // Initialize all optimizations
     preloadCriticalResources();
     optimizeAnimations();
-    registerServiceWorker();
+    void manageServiceWorker();
     optimizeScroll();
     optimizeResize();
     setupIntersectionObserver();
