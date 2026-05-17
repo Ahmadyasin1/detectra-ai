@@ -3,7 +3,6 @@ import { useInView } from 'framer-motion';
 import { useRef, useState } from 'react';
 import { Mail, MapPin, Phone, Send, CheckCircle, AlertCircle, Sparkles, Users } from 'lucide-react';
 
-const TEAM_PHOTO_SRC = '/3%20nomony.png';
 import PageHero from '../components/PageHero';
 import { submitContactForm } from '../lib/supabaseDb';
 
@@ -67,17 +66,17 @@ export default function Contact() {
     {
       name:  'Ahmad Yasin',
       role:  'AI Engineer · Lead Developer',
-      email: 'ahmadyasin.info@gmail.com',
+      email: 'mianahmadyasin3@gmail.com',
     },
     {
       name:  'Eman Sarfraz',
       role:  'AI Engineer · Backend & Pipeline',
-      email: 'emansarfraz.tech@gmail.com',
+      email: 'emansarfraz@student.ucp.edu.pk',
     },
     {
       name:  'Abdul Rehman',
       role:  'AI Engineer · Frontend & Integration',
-      email: 'abdulrehman1.info@gmail.com',
+      email: 'abdulrehman@student.ucp.edu.pk',
     },
     {
       name:  'Dr. Usman Aamer',

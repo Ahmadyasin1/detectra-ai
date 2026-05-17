@@ -2,14 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, Link } from 'react-router-dom';
 import {
-  ArrowLeft, Shield, AlertTriangle, Mic, Volume2, Users, BarChart3,
+  Shield, AlertTriangle, Mic, Volume2, Users, BarChart3,
   FileJson, Film, Download, ChevronDown, ChevronUp, Search,
   Clock, Activity, Brain, Eye, Zap, TrendingUp, CheckCircle,
   PersonStanding, Sparkles, Target, FileText, Maximize2, Layers,
   type LucideIcon,
 } from 'lucide-react';
 import {
-  getJobResult, AnalysisResult, SurveillanceEvent,
+  AnalysisResult, SurveillanceEvent,
   riskTextClass, riskBgClass, riskColor,
   severityBadgeClass, severityHex,
   fmtSeconds, fmtDuration,
@@ -19,9 +19,12 @@ import {
   type FrameAnalyticsPoint,
 } from '../lib/detectraApi';
 import { useAuth } from '../contexts/AuthContext';
-import { getVideoUploadByJobId } from '../lib/supabaseDb';
+import { loadJobAnalysisResult } from '../lib/loadJobResult';
+import { userCanAccessJob } from '../lib/userJobAccess';
+import { getLocalJobs } from '../lib/localJobSession';
 import EventTimeline from '../components/EventTimeline';
 import AIAssistant from '../components/AIAssistant';
+import Breadcrumbs from '../components/ui/Breadcrumbs';
 
 // ── Risk Gauge (semi-circle SVG) ────────────────────────────────────────────
 
@@ -474,22 +477,40 @@ export default function JobResults() {
     if (!jobId || gotResultRef.current) return;
     setLoading(true);
     setError('');
-    // Try API first, fall back to Supabase-cached result
-    getJobResult(jobId)
-      .then(r => { setResult(r); gotResultRef.current = true; })
-      .catch(async (e) => {
-        const currentUser = userRef.current;
-        if (currentUser) {
-          const upload = await getVideoUploadByJobId(currentUser.id, jobId).catch(() => null);
-          if (upload?.analysis_results) {
-            setResult(upload.analysis_results);
-            gotResultRef.current = true;
-            return;
-          }
+
+    const load = async () => {
+      const currentUser = userRef.current;
+      if (currentUser) {
+        const allowed =
+          (await userCanAccessJob(currentUser.id, jobId)) ||
+          getLocalJobs().some((e) => e.job_id === jobId);
+        if (!allowed) {
+          setError('You do not have access to this analysis. It may belong to another account.');
+          setLoading(false);
+          return;
         }
-        setError(e.message || 'Results not available — the job may have been deleted or the server is offline.');
-      })
-      .finally(() => setLoading(false));
+      }
+
+      try {
+        const r = await loadJobAnalysisResult(jobId, currentUser?.id);
+        setResult(r);
+        gotResultRef.current = true;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Results not available';
+        const incomplete = msg.toLowerCase().includes('not completed');
+        setError(
+          msg.includes('403') || msg.toLowerCase().includes('access denied')
+            ? 'You do not have access to this analysis.'
+            : incomplete
+              ? 'This analysis is still processing. Open it from the progress page when it finishes.'
+              : msg || 'Results not available — the job may have been deleted or the server is offline.',
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void load();
   }, [jobId]);
 
   async function handleTranslateTranscript() {
@@ -521,9 +542,16 @@ export default function JobResults() {
       <div className="text-center">
         <AlertTriangle className="w-14 h-14 text-red-400 mx-auto mb-4" />
         <p className="text-red-300 font-medium">{error}</p>
-        <Link to="/analyze">
-          <button className="mt-5 btn-dark text-sm">Back to Analyzer</button>
-        </Link>
+        <motion.div className="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
+          {error.includes('still processing') && jobId && (
+            <Link to={`/analyze/progress/${jobId}`}>
+              <button className="btn-dark text-sm">View progress</button>
+            </Link>
+          )}
+          <Link to="/analyze">
+            <button className="btn-dark text-sm">Back to Analyzer</button>
+          </Link>
+        </motion.div>
       </div>
     </div>
   );
@@ -564,12 +592,14 @@ export default function JobResults() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-5 sm:space-y-6 min-w-0">
 
         {/* ── Breadcrumb + exports ── */}
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <Link to="/analyze" className="inline-flex items-center gap-2 text-gray-500 hover:text-cyan-400 transition-colors text-sm">
-            <ArrowLeft className="w-4 h-4" />
-            Analyzer
-          </Link>
-          <div className="flex gap-2 flex-wrap">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <Breadcrumbs
+            items={[
+              { label: 'Analyzer', to: '/analyze' },
+              { label: result.video_name || 'Results' },
+            ]}
+          />
+          <div className="flex gap-2 flex-wrap ml-auto">
             <a href={getRagJsonUrl(jobId!)} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-gray-700 text-gray-400 hover:text-white rounded-xl border border-white/20 text-xs transition-colors">
               <FileJson className="w-3.5 h-3.5" />RAG JSON

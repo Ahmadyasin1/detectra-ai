@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Home, ArrowLeft } from 'lucide-react';
+import { Home, ArrowLeft, Upload } from 'lucide-react';
 import { DetectraLogoMark } from '../components/DetectraLogo';
 
 export default function NotFound() {
@@ -24,7 +24,7 @@ export default function NotFound() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_60%,rgba(34,211,238,0.12),transparent_70%)] blur-2xl pointer-events-none" />
         </div>
 
-        <DetectraLogoMark size="lg" className="mx-auto mb-5" />
+        <DetectraLogoMark size="lg" glow className="mx-auto justify-center mb-5" />
 
         <h1 className="text-2xl font-bold text-white mb-3">Page not found</h1>
         <p className="text-gray-500 text-sm leading-relaxed mb-8">
@@ -32,6 +32,16 @@ export default function NotFound() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link to="/analyze">
+            <motion.div
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex items-center gap-2 px-6 py-3 bg-white/10 border border-white/20 text-gray-200 rounded-xl font-semibold text-sm hover:border-cyan-500/40 transition-all"
+            >
+              <Upload className="w-4 h-4" />
+              Open Analyzer
+            </motion.div>
+          </Link>
           <Link to="/">
             <motion.div
               whileHover={{ scale: 1.03 }}

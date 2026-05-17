@@ -1,105 +1,87 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+﻿/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Cpu, RotateCw, UploadCloud, Film, X, Radio, Play, Database, Video, Shield,
+  Cpu, UploadCloud, Film, X, Radio, Play, Video, Shield,
   Users, TrendingUp, Brain, FileText, Download, Bell, Loader2, Square,
-  Search, SlidersHorizontal, Sparkles, Trash2, ExternalLink
+  Sparkles,
 } from 'lucide-react';
 import Chart from 'chart.js/auto';
 import {
-  submitVideo, submitVideoFromUrl, checkHealth, getJobResult, listMyJobs, deleteJob,
+  submitVideo, submitVideoFromUrl, checkHealth, getJobStatus, deleteJob,
   getReportUrl, getVideoUrl, distinctPersonCount, apiUrl, getLiveWsUrl,
   type JobStatus, type AnalysisResult, type ApiHealth,
 } from '../lib/detectraApi';
+import {
+  AnalyzerCommandHero,
+  AnalyzerKpi,
+  AnalyzerSection,
+  AnalyzerCollapsible,
+} from '../components/dashboard/AnalyzerUI';
+import JobLibraryPanel from '../components/dashboard/JobLibraryPanel';
+import { dedupeJobsByVideo } from '../lib/dedupeJobs';
+import UserBanner from '../components/ui/UserBanner';
+import { validateVideoFile, formatFileSize } from '../lib/userFacing';
 import './Dashboard.css';
 import {
   createVideoUpload,
   getUserVideoUploads,
-  getVideoUploadByJobId,
   deleteVideoUpload,
   uploadVideoFileToBucket,
-  updateVideoUpload,
+  type VideoUpload,
 } from '../lib/supabaseDb';
-import { mergeJobsFromApiAndDatabase, jobsFromUploadsOnly } from '../lib/jobListMerge';
+import { loadSecureUserJobHistory, uploadsByJobId } from '../lib/jobListMerge';
+import { buildIntegrationSnapshot } from '../lib/integration';
+import IntegrationStatusBar from '../components/dashboard/IntegrationStatusBar';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { addLocalJob, removeLocalJob, getLocalJobs } from '../lib/localJobSession';
+import { syncUserJobLibraryToDatabase } from '../lib/jobPersistence';
+import { loadJobAnalysisResult, jobIsViewable } from '../lib/loadJobResult';
 
-// Reusing global styling via style tag
 const DashboardStyles = () => (
   <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
-    .glass {
-      background: rgba(13, 17, 23, 0.7);
-      backdrop-filter: blur(12px);
-      border: 1px solid #21262d;
+    .analyzer-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .analyzer-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+    .analyzer-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 8px; }
+    @keyframes analyzer-scanline {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100%); }
     }
-    .panel {
-      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
-      backdrop-filter: blur(14px);
-      border: 1px solid rgba(255,255,255,0.10);
-      box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+    .analyzer-scanline {
+      position: absolute; inset-inline: 0; top: 0; height: 2px;
+      background: rgba(34, 211, 238, 0.3);
+      box-shadow: 0 0 12px rgba(34, 211, 238, 0.35);
+      animation: analyzer-scanline 4s linear infinite;
+      pointer-events: none; z-index: 10;
     }
-    .panel:hover {
-      border-color: rgba(34,211,238,0.25);
+    .analyzer-table thead th {
+      position: sticky; top: 0; z-index: 5;
+      background: rgba(0,0,0,0.55); backdrop-filter: blur(12px);
     }
-    .soft-ring {
-      box-shadow:
-        0 0 0 1px rgba(255,255,255,0.06) inset,
-        0 18px 50px rgba(0,0,0,0.55);
+    .brand-bg-gradient { background: linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%); }
+    .brand-gradient {
+      background: linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
     .btn-premium {
       background: linear-gradient(135deg, rgba(34,211,238,0.18), rgba(59,130,246,0.10));
-      border: 1px solid rgba(34,211,238,0.28);
-      color: rgba(165,243,252,0.92);
+      border: 1px solid rgba(34,211,238,0.28); color: rgba(165,243,252,0.95);
     }
     .btn-premium:hover { background: linear-gradient(135deg, rgba(34,211,238,0.26), rgba(59,130,246,0.14)); }
     .btn-ghost {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
       color: rgba(226,232,240,0.92);
     }
     .btn-ghost:hover { background: rgba(255,255,255,0.09); }
     .btn-danger {
-      background: rgba(244,63,94,0.10);
-      border: 1px solid rgba(244,63,94,0.20);
+      background: rgba(244,63,94,0.10); border: 1px solid rgba(244,63,94,0.20);
       color: rgba(251,113,133,0.95);
     }
     .btn-danger:hover { background: rgba(244,63,94,0.16); }
-    .brand-gradient {
-      background: linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .brand-bg-gradient {
-      background: linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%);
-    }
-    .mono { font-family: 'JetBrains Mono', monospace; }
-    .custom-scroll::-webkit-scrollbar { width: 4px; }
-    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-    .custom-scroll::-webkit-scrollbar-thumb { background: #21262d; border-radius: 10px; }
-    
-    @keyframes scanline {
-      0% { transform: translateY(-100%); }
-      100% { transform: translateY(100%); }
-    }
-    .scanline {
-      position: absolute;
-      top: 0; left: 0; width: 100%; height: 2px;
-      background: rgba(34, 211, 238, 0.25);
-      box-shadow: 0 0 10px rgba(34, 211, 238, 0.45);
-      animation: scanline 4s linear infinite;
-      pointer-events: none;
-      z-index: 10;
-    }
-    .table-sticky thead th {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      background: rgba(255,255,255,0.04);
-      backdrop-filter: blur(14px);
-    }
   `}</style>
 );
 
@@ -116,8 +98,10 @@ export default function Dashboard() {
   const [apiOnline, setApiOnline] = useState(false);
   const [backendStatus, setBackendStatus] = useState('Initializing...');
   const [health, setHealth] = useState<ApiHealth | null>(null);
+  const [healthKnown, setHealthKnown] = useState(false);
   
   const [jobs, setJobs] = useState<JobStatus[]>([]);
+  const [userUploads, setUserUploads] = useState<VideoUpload[]>([]);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [jobQuery, setJobQuery] = useState('');
   const [jobFilter, setJobFilter] = useState<'all' | 'completed' | 'running' | 'pending' | 'failed'>('all');
@@ -128,7 +112,10 @@ export default function Dashboard() {
   // Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [bucketWarning, setBucketWarning] = useState<string | null>(null);
+  const [liveAdvancedOpen, setLiveAdvancedOpen] = useState(false);
   
   // Live State
   const [isLive, setIsLive] = useState(false);
@@ -150,15 +137,18 @@ export default function Dashboard() {
       const res = await checkHealth();
       setApiOnline(true);
       setHealth(res);
+      setHealthKnown(true);
       if (res.models_loaded) {
         setBackendStatus(res.active_jobs > 0 ? `ACTIVE JOBS: ${res.active_jobs}` : 'AI MODELS READY');
       } else {
-        setBackendStatus('LOADING AI MODELS…');
+        setBackendStatus('LOADING AI MODELS...');
       }
-    } catch {
+    } catch (err) {
+      console.warn('[Dashboard] health check failed:', err);
       setApiOnline(false);
       setHealth(null);
-      setBackendStatus('WAITING FOR ENGINE...');
+      setHealthKnown(true);
+      setBackendStatus('Cannot reach analysis server');
     }
   };
 
@@ -170,25 +160,32 @@ export default function Dashboard() {
 
   const loadJobs = async () => {
     try {
-      const list = await listMyJobs();
-      if (user && isSupabaseConfigured) {
-        const uploads = await getUserVideoUploads(user.id).catch(() => []);
-        setJobs(mergeJobsFromApiAndDatabase(list, uploads, user.id));
-      } else {
-        setJobs(list);
+      if (user) {
+        const [merged, uploads] = await Promise.all([
+          loadSecureUserJobHistory(user.id),
+          getUserVideoUploads(user.id).catch(() => []),
+        ]);
+        setJobs(merged);
+        setUserUploads(uploads);
+        void syncUserJobLibraryToDatabase(user.id, merged).then(async () => {
+          const refreshed = await getUserVideoUploads(user.id).catch(() => []);
+          if (refreshed.length) setUserUploads(refreshed);
+        });
+        return;
       }
-    } catch (err) {
-      console.warn('Jobs list fetch failed', err);
-      if (user && isSupabaseConfigured) {
-        try {
-          const uploads = await getUserVideoUploads(user.id);
-          setJobs(jobsFromUploadsOnly(uploads, user.id));
-        } catch {
-          setJobs([]);
-        }
+
+      const local = getLocalJobs();
+      if (local.length) {
+        const statuses = await Promise.all(
+          local.map((e) => getJobStatus(e.job_id).catch(() => null)),
+        );
+        setJobs(statuses.filter((s): s is JobStatus => s !== null));
       } else {
         setJobs([]);
       }
+    } catch (err) {
+      console.warn('Jobs list fetch failed', err);
+      setJobs([]);
     }
   };
 
@@ -198,19 +195,36 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [user?.id]);
 
+  const pickFile = (file: File | undefined) => {
+    if (!file) return;
+    const err = validateVideoFile(file);
+    if (err) {
+      setUploadError(err);
+      return;
+    }
+    setUploadError(null);
+    setSelectedFile(file);
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) setSelectedFile(file);
+    pickFile(e.target.files?.[0]);
+    e.target.value = '';
   };
 
   const clearFile = () => {
     setSelectedFile(null);
+    setUploadError(null);
   };
 
   const startUpload = async () => {
     if (!selectedFile) return;
+    if (!apiOnline) {
+      setUploadError('Analysis server is offline. Wait for API ONLINE or try again in a moment.');
+      return;
+    }
     setIsUploading(true);
-    
+    setUploadError(null);
+
     try {
       let uploadResult: { storagePath: string; publicUrl: string | null; error: string | null } | null = null;
       if (user && isSupabaseConfigured) {
@@ -218,7 +232,7 @@ export default function Dashboard() {
       }
 
       // Only use the bucket-routed path when the upload actually succeeded.
-      // On any error we silently fall back to direct multipart upload — this
+      // On any error we silently fall back to direct multipart upload â€” this
       // avoids the "Bucket not found / object missing" cascade where the
       // backend later fails to download a path that was never created.
       const bucketOk = !!uploadResult && !uploadResult.error;
@@ -236,7 +250,7 @@ export default function Dashboard() {
           if (/bucket.*not.*found/i.test(uploadResult.error)) {
             setBucketWarning(
               `Storage bucket "${import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'videos'}" not found in Supabase. ` +
-                'Create it in Supabase Dashboard → Storage, or set VITE_SUPABASE_STORAGE_BUCKET to match an existing bucket. ' +
+                'Create it in Supabase Dashboard â†’ Storage, or set VITE_SUPABASE_STORAGE_BUCKET to match an existing bucket. ' +
                 'Falling back to direct upload for now.',
             );
           }
@@ -244,13 +258,21 @@ export default function Dashboard() {
         res = await submitVideo(selectedFile);
       }
 
+      addLocalJob(res.job_id, selectedFile.name || res.video_name);
+
       if (user && isSupabaseConfigured) {
-        await createVideoUpload(user.id, res.job_id, selectedFile.name || res.video_name).catch(console.warn);
+        await createVideoUpload(user.id, res.job_id, selectedFile.name || res.video_name, {
+          ...(uploadResult?.storagePath ? { sourceStoragePath: uploadResult.storagePath } : {}),
+          ...(uploadResult?.publicUrl ? { sourcePublicUrl: uploadResult.publicUrl } : {}),
+        }).catch(console.warn);
       }
       clearFile();
       navigate(`/analyze/progress/${res.job_id}`);
-    } catch (err: any) {
-      alert(`Upload failed: ${err?.message ?? 'Unknown error'}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
+      setUploadError(msg.includes('fetch') || msg.includes('network')
+        ? 'Network error â€” check your connection and that the analysis server is online.'
+        : msg);
     } finally {
       setIsUploading(false);
     }
@@ -277,25 +299,10 @@ export default function Dashboard() {
     setJobData(null);
 
     try {
-      const result = await getJobResult(jobId);
+      const result = await loadJobAnalysisResult(jobId, user?.id);
       applyResultToDashboard(result);
-
-      if (user && isSupabaseConfigured) {
-        updateVideoUpload(user.id, jobId, {
-          status: 'completed',
-          analysis_results: result,
-        }).catch(console.warn);
-      }
       loadJobs();
     } catch {
-      if (user && isSupabaseConfigured) {
-        const row = await getVideoUploadByJobId(user.id, jobId).catch(() => null);
-        if (row?.analysis_results) {
-          applyResultToDashboard(row.analysis_results);
-          loadJobs();
-          return;
-        }
-      }
       console.warn('Load Job Data Error: API offline or job missing, no cached result');
     }
   };
@@ -396,7 +403,7 @@ export default function Dashboard() {
         else alert(`Live stream failed (HTTP ${res.status}). Check the backend.`);
       } catch (err) {
         console.error('Live start failed:', err);
-        alert('Failed to reach live-stream processor — is the backend running?');
+        alert('Failed to reach live-stream processor - is the backend running?');
       }
     }
   };
@@ -456,9 +463,9 @@ export default function Dashboard() {
     if (currentJobId) window.open(getVideoUrl(currentJobId), '_blank');
   };
 
-  const handleOpenJob = (jobId: string, status?: string) => {
+  const handleOpenJob = (jobId: string, status?: string, hasResult?: boolean, progress?: number) => {
     if (!jobId) return;
-    if (status === 'completed') navigate(`/analyze/results/${jobId}`);
+    if (jobIsViewable(status, hasResult, progress)) navigate(`/analyze/results/${jobId}`);
     else navigate(`/analyze/progress/${jobId}`);
   };
 
@@ -475,6 +482,7 @@ export default function Dashboard() {
       await deleteVideoUpload(user.id, jobId).catch(() => {});
     }
     if (currentJobId === jobId) setCurrentJobId(null);
+    removeLocalJob(jobId);
     await loadJobs();
   };
 
@@ -485,7 +493,10 @@ export default function Dashboard() {
   const speechCount = r ? (r.speech_segments || []).filter((v: any) => !v.is_noise).length : 0;
   const risk = r?.risk_level || 'STABLE';
   const riskClass = risk === 'CRITICAL' ? 'text-rose-500' : risk === 'HIGH' ? 'text-orange-400' : 'text-cyan-400';
-  const filteredJobs = jobs
+  const displayJobs = useMemo(() => dedupeJobsByVideo(jobs), [jobs]);
+  const uploadsByJob = useMemo(() => uploadsByJobId(userUploads), [userUploads]);
+
+  const filteredJobs = displayJobs
     .filter(j => {
       if (jobFilter === 'all') return true;
       if (jobFilter === 'running') return j.status === 'running';
@@ -500,78 +511,127 @@ export default function Dashboard() {
       return (j.video_name || '').toLowerCase().includes(q) || (j.job_id || '').toLowerCase().includes(q);
     });
 
+  const triggerFileUpload = () => {
+    (document.querySelector('#analyzer-file-input') as HTMLInputElement | null)?.click();
+  };
+
+  const runningCount = displayJobs.filter(
+    (j) => j.status === 'running' || j.status === 'pending',
+  ).length;
+  const integration = buildIntegrationSnapshot(health, {
+    userId: user?.id,
+    apiOnline,
+    healthKnown,
+  });
+
   return (
     <>
       <DashboardStyles />
-      <div className="min-h-screen flex flex-col font-[Inter] bg-[#05070a] text-[#e6edf3] overflow-x-hidden pt-20 md:pt-24">
-        {!user && !isSupabaseConfigured && (
-          <div className="px-6 pb-2">
-            <div className="panel soft-ring rounded-2xl px-4 py-2.5 border border-amber-500/30 bg-amber-500/5 flex items-center justify-between gap-3">
-              <span className="text-[11px] text-amber-200/90">
-                Guest mode — account & history features are off. Add <code className="font-mono">VITE_SUPABASE_URL</code> &amp; <code className="font-mono">VITE_SUPABASE_ANON_KEY</code> to <code className="font-mono">.env</code> to enable them. The AI pipeline still works.
-              </span>
+      <motion.div className="analyzer-page min-h-screen bg-transparent text-white overflow-x-hidden">
+        <section className="relative pt-20 sm:pt-24 pb-6 sm:pb-8">
+          <div className="page-shell">
+            <AnalyzerCommandHero
+              onUpload={triggerFileUpload}
+              onRefresh={loadJobs}
+              apiOnline={apiOnline}
+              jobsCount={displayJobs.length}
+              modelsReady={!!health?.models_loaded}
+              backendStatus={backendStatus}
+              version={health?.version ? `v${health.version}` : undefined}
+              accountLinked={!!user}
+              cloudSync={!!health?.supabase_configured}
+            />
+            <div className="mt-4">
+              <IntegrationStatusBar snapshot={integration} />
             </div>
           </div>
+        </section>
+
+        <div
+          className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent page-shell"
+          aria-hidden
+        />
+
+        <div className="page-shell space-y-6 pb-16 pt-8 sm:pt-10">
+        {!user && isSupabaseConfigured && (
+            <UserBanner variant="warning">
+              Sign in to save analysis history securely to your account. Uploads still work as a guest on this device only.
+            </UserBanner>
+        )}
+        {user && isSupabaseConfigured && healthKnown && health && !health.supabase_configured && (
+            <UserBanner variant="warning">
+              Your account is connected, but the analysis server is not syncing to Supabase yet. Jobs are still saved from this browser; ask your admin to set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on Heroku.
+            </UserBanner>
+        )}
+        {!user && !isSupabaseConfigured && (
+            <UserBanner variant="warning">
+              Guest mode: add Supabase keys in .env for accounts and cloud history. Video analysis still works against the API.
+            </UserBanner>
+        )}
+        {!apiOnline && (
+            <UserBanner
+              variant="error"
+              title="Analysis server unavailable"
+              action={
+                <button
+                  type="button"
+                  onClick={checkServerHealth}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-200"
+                >
+                  Retry
+                </button>
+              }
+            >
+              Cannot connect to the AI backend. Uploads are paused until the server is back online.
+            </UserBanner>
+        )}
+        {uploadError && (
+            <UserBanner variant="error" onDismiss={() => setUploadError(null)}>
+              {uploadError}
+            </UserBanner>
         )}
         {bucketWarning && (
-          <div className="px-6 pb-2">
-            <div className="panel soft-ring rounded-2xl px-4 py-2.5 border border-orange-500/30 bg-orange-500/5 flex items-start justify-between gap-3">
-              <span className="text-[11px] text-orange-200/90 leading-relaxed">{bucketWarning}</span>
+            <div className="elite-card border-amber-500/30 bg-amber-500/5 px-4 py-3 flex items-start justify-between gap-3">
+              <span className="text-sm text-amber-200/90 leading-relaxed">{bucketWarning}</span>
               <button
                 onClick={() => setBucketWarning(null)}
-                className="text-orange-300/70 hover:text-orange-200 text-[10px] font-bold uppercase tracking-widest"
+                type="button"
+                className="text-sm text-amber-300 hover:text-amber-100 shrink-0 min-h-[44px] px-2"
               >
                 Dismiss
               </button>
             </div>
-          </div>
         )}
-        <div className="px-6 pb-4">
-          <div className="panel soft-ring rounded-2xl px-4 py-3 border border-white/10 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className={`w-2 h-2 rounded-full ${apiOnline ? 'bg-cyan-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-slate-700'}`}></span>
-              <span className={`text-[10px] font-bold uppercase tracking-wider ${apiOnline ? 'text-cyan-400' : 'text-slate-500'}`}>
-                {apiOnline ? 'API ONLINE' : 'API OFFLINE'}
-              </span>
-              <span className="hidden sm:inline text-slate-600">•</span>
-              <span className="hidden sm:inline text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                {backendStatus}
-              </span>
-              {health?.version && (
-                <span className="hidden md:inline text-slate-600 font-mono text-[10px]">
-                  v{health.version}
-                </span>
-              )}
-            </div>
-            <button onClick={loadJobs} className="p-2 rounded-lg hover:bg-white/10 transition-colors text-slate-400 hover:text-white" title="Refresh data">
-              <RotateCw className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
 
-        {/* Main Layout */}
-        <main className="flex-1 flex overflow-hidden">
-          {/* Left Sidebar */}
-          <aside className="w-80 border-r border-[#21262d] flex flex-col bg-transparent/20">
-            {/* Upload Section */}
-            <div className="p-5 border-b border-white/10 space-y-4">
-              <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                <UploadCloud className="w-3.5 h-3.5" />
-                Ingest Evidence
-              </h3>
-              
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
+          <aside className="lg:col-span-4 flex flex-col gap-4 lg:sticky lg:top-28 lg:self-start">
+            <AnalyzerSection title="New analysis" icon={UploadCloud}>
               {!selectedFile ? (
-                <label className="group relative flex flex-col items-center justify-center p-6 border-2 border-dashed border-white/10 rounded-xl hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all cursor-pointer panel soft-ring">
-                  <input type="file" className="hidden" accept="video/*" onChange={handleFileSelect} />
-                  <Film className="w-8 h-8 text-slate-600 group-hover:text-cyan-400 mb-2 transition-colors" />
-                  <span className="text-xs font-semibold text-slate-200">Drop a video or browse</span>
-                  <span className="text-[10px] text-slate-500 mt-1">MP4, AVI, MOV · up to 500MB</span>
+                <label
+                  className={`analyzer-upload-zone ${isDragOver ? 'analyzer-upload-zone--active' : ''}`}
+                  onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                  onDragLeave={() => setIsDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragOver(false);
+                    pickFile(e.dataTransfer.files?.[0]);
+                  }}
+                >
+                  <input id="analyzer-file-input" type="file" className="hidden" accept="video/*,.mp4,.mov,.avi,.mkv,.webm" onChange={handleFileSelect} />
+                  <span className="analyzer-upload-icon" aria-hidden>
+                    <Film className="h-6 w-6 text-cyan-400" />
+                  </span>
+                  <span className="text-sm font-semibold text-gray-100">Drop video or browse</span>
+                  <span className="mt-1 text-xs text-gray-500 text-center">MP4, MOV, AVI, MKV  |   max 500 MB</span>
                 </label>
               ) : (
-                <div className="animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center gap-3 p-3 bg-white/5 backdrop-blur-md rounded-lg border border-white/10 panel soft-ring">
+                <motion.div className="space-y-3" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+                  <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/30 p-3">
                     <Video className="w-4 h-4 text-cyan-400" />
-                    <span className="text-xs truncate flex-1 font-medium">{selectedFile.name}</span>
+                    <span className="text-xs truncate flex-1 font-medium" title={selectedFile.name}>
+                      {selectedFile.name}
+                      <span className="block text-[10px] text-slate-500 font-normal">{formatFileSize(selectedFile.size)}</span>
+                    </span>
                     <button onClick={clearFile} className="p-1 text-slate-500 hover:text-white">
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -579,20 +639,20 @@ export default function Dashboard() {
                   <button 
                     onClick={startUpload}
                     disabled={isUploading}
-                    className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 rounded-xl brand-bg-gradient text-slate-900 font-extrabold text-sm shadow-lg shadow-cyan-500/25 hover:opacity-95 active:scale-[0.99] transition-all disabled:opacity-50"
+                    className="analyzer-btn-primary w-full min-h-[48px] disabled:opacity-50"
                   >
-                    {isUploading ? <><Loader2 className="w-4 h-4 animate-spin"/> UPLOADING...</> : 'EXECUTE ANALYSIS'}
+                    {isUploading ? <><Loader2 className="h-4 w-4 animate-spin" /> Uploading...</> : 'Run multimodal analysis'}
                   </button>
-                </div>
+                </motion.div>
               )}
-            </div>
+            </AnalyzerSection>
 
-            {/* Live Stream Section */}
-            <div className="p-5 border-b border-white/10 space-y-4">
-              <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                <Radio className="w-3.5 h-3.5" />
-                Active Surveillance
-              </h3>
+            <AnalyzerCollapsible
+              title="Live camera (advanced)"
+              icon={Radio}
+              open={liveAdvancedOpen}
+              onToggle={() => setLiveAdvancedOpen((v) => !v)}
+            >
               <div className="flex gap-2">
                 <input 
                   type="text" 
@@ -609,169 +669,35 @@ export default function Dashboard() {
                       : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20'
                   }`}
                 >
-                  {isLive ? <><Square className="w-3 h-3 border border-current rounded-sm"/> STOP</> : <><Play className="w-3 h-3"/> LIVE</>}
+                  {isLive ? <><Square className="w-3 h-3" /> Stop</> : <><Play className="w-3 h-3" /> Go live</>}
                 </button>
               </div>
-            </div>
+            </AnalyzerCollapsible>
 
-            {/* Historical Records */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="p-5 pb-3">
-                <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                  <Database className="w-3.5 h-3.5" />
-                  Archive Jobs
-                </h3>
-              </div>
-              <div className="px-5 pb-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 panel">
-                    <Search className="w-4 h-4 text-slate-500" />
-                    <input
-                      value={jobQuery}
-                      onChange={(e) => setJobQuery(e.target.value)}
-                      placeholder="Search by name or job id…"
-                      className="w-full bg-transparent text-xs text-slate-200 placeholder:text-slate-600 outline-none"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 panel">
-                    <SlidersHorizontal className="w-4 h-4 text-slate-500" />
-                    <select
-                      value={jobFilter}
-                      onChange={(e) => setJobFilter(e.target.value as any)}
-                      className="bg-transparent text-xs text-slate-200 outline-none"
-                    >
-                      <option value="all">All</option>
-                      <option value="completed">Completed</option>
-                      <option value="running">Running</option>
-                      <option value="pending">Queued</option>
-                      <option value="failed">Failed</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between text-[10px] text-slate-600">
-                  <span className="font-mono">{filteredJobs.length} job(s)</span>
-                  <button onClick={loadJobs} className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-200 transition-colors">
-                    <RotateCw className="w-3.5 h-3.5" /> refresh
-                  </button>
-                </div>
-              </div>
-              <div className="flex-1 flex flex-col gap-2 p-5 pt-0 overflow-y-auto custom-scroll">
-                {!filteredJobs.length ? (
-                  <div className="text-center py-10 opacity-30">
-                    <Database className="w-8 h-8 mx-auto mb-2" />
-                    <p className="text-xs font-mono">No jobs found</p>
-                  </div>
-                ) : (
-                  filteredJobs.map(j => (
-                    <div 
-                      key={j.job_id} 
-                      className={`p-3 bg-white/5 backdrop-blur-md border rounded-2xl transition-all group panel soft-ring ${
-                        j.job_id === currentJobId ? 'ring-1 ring-cyan-500 border-cyan-500' : 'border-white/10'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="text-[10px] font-extrabold text-slate-300 truncate group-hover:text-white transition-colors">
-                          {j.video_name}
-                        </span>
-                        <span className="text-[8px] font-mono text-slate-600 truncate max-w-[60px]">{j.job_id}</span>
-                      </div>
-                      <div className="flex items-center gap-2 border-white/10">
-                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
-                          j.status === 'completed' ? 'bg-cyan-500/10 text-cyan-500' :
-                          j.status === 'failed' ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'
-                        }`}>
-                          {j.status}
-                        </span>
-                        <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
-                          <div className="h-full brand-bg-gradient" style={{ width: `${j.status === 'completed' ? 100 : j.progress}%` }}></div>
-                        </div>
-                        <span className="text-[9px] font-mono text-slate-500">{j.processing_s ?? 0}s</span>
-                      </div>
-
-                      <div className="flex gap-2 mt-3">
-                        <button
-                          onClick={() => handleOpenJob(j.job_id, j.status)}
-                          className="flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all btn-premium"
-                        >
-                          <span className="inline-flex items-center justify-center gap-1">
-                            Open <ExternalLink className="w-3.5 h-3.5" />
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => loadJobData(j.job_id)}
-                          className="py-2 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all btn-ghost"
-                          title="Preview metrics in dashboard"
-                        >
-                          View
-                        </button>
-                        <button
-                          onClick={() => handleDeleteJob(j.job_id)}
-                          className="py-2 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all btn-danger"
-                          title="Delete job"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
           </aside>
 
-          {/* Center Stage: Analytics & Feed */}
-          <section className="flex-1 flex flex-col bg-black relative">
-            <div className="flex-1 overflow-y-auto custom-scroll p-6 space-y-6">
+          <section className="lg:col-span-8 flex flex-col gap-5 min-w-0">
+            <div className="space-y-5">
 
-              {/* Empty state when no job is selected */}
               {!r && !isLive && (
-                <div className="panel soft-ring rounded-3xl p-7 border border-white/10">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-2xl brand-bg-gradient flex items-center justify-center shadow-lg shadow-cyan-500/20">
-                      <Sparkles className="w-6 h-6 text-slate-900" />
-                    </div>
-                    <div className="flex-1">
-                      <h2 className="text-xl font-extrabold tracking-tight text-white">Analyze footage in seconds</h2>
-                      <p className="text-slate-400 text-sm mt-1 max-w-2xl">
-                        Upload a video to run multimodal detection (visual + audio + fusion). Or open a previous job to view charts, alerts, and the full report.
-                      </p>
-                      <div className="flex flex-wrap gap-2 mt-4">
-                        <button
-                          onClick={() => (document.querySelector('input[type="file"]') as HTMLInputElement | null)?.click()}
-                          className="px-4 py-2 rounded-xl font-extrabold text-sm btn-premium"
-                        >
-                          Upload video
-                        </button>
-                        <button
-                          onClick={() => setJobFilter('completed')}
-                          className="px-4 py-2 rounded-xl font-extrabold text-sm btn-ghost"
-                        >
-                          View completed jobs
-                        </button>
-                      </div>
-                      <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-[12px] text-slate-400">
-                        <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
-                          <div className="text-slate-200 font-bold">Pipeline timeline</div>
-                          <div className="text-slate-500 mt-0.5">Live stage updates + ETA</div>
-                        </div>
-                        <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
-                          <div className="text-slate-200 font-bold">Risk scoring</div>
-                          <div className="text-slate-500 mt-0.5">Severity-weighted alerts</div>
-                        </div>
-                        <div className="p-3 rounded-2xl bg-white/5 border border-white/10">
-                          <div className="text-slate-200 font-bold">Exportables</div>
-                          <div className="text-slate-500 mt-0.5">Report + labeled footage</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-8 text-center">
+                  <p className="text-sm text-gray-400">
+                    Select a job from the library below or upload a video to see metrics and charts.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={triggerFileUpload}
+                    className="analyzer-btn-primary mt-4 min-h-[44px] px-5"
+                  >
+                    Upload video
+                  </button>
                 </div>
               )}
-              
+
               {/* Live Preview Stage */}
               <div className={`animate-in zoom-in-95 duration-300 ${!isLive ? 'hidden' : ''}`}>
-                <div className="relative rounded-3xl border border-white/10 bg-white/5 backdrop-blur-md overflow-hidden shadow-2xl panel soft-ring">
-                  <div className="scanline"></div>
+                <div className="relative rounded-3xl border border-white/10 bg-white/5 backdrop-blur-md overflow-hidden shadow-2xl elite-card">
+                  <div className="analyzer-scanline"></div>
                   {liveCanvasSrc && <img src={liveCanvasSrc} className="w-full h-auto min-h-[300px] object-contain" alt="SURVEILLANCE FEED" />}
                   <div className="absolute top-4 left-4 flex gap-3">
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-red-600/90 rounded-md shadow-lg animate-pulse">
@@ -792,48 +718,27 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Metric Dashboard */}
-              <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-4">
-                <div className="p-4 panel soft-ring rounded-3xl flex flex-col items-center justify-center text-center group cursor-default transition-all">
-                  <Users className="w-4 h-4 text-slate-600 mb-2" />
-                  <span className="text-3xl font-black brand-gradient mono">{distinctPeopleCount.toString().padStart(2, '0')}</span>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Distinct individuals</span>
-                </div>
-                <div className="p-4 panel soft-ring rounded-3xl flex flex-col items-center justify-center text-center group cursor-default transition-all">
-                  <Bell className="w-4 h-4 text-slate-600 mb-2" />
-                  <span className="text-3xl font-black text-rose-500 mono">{eventsCount.toString().padStart(2, '0')}</span>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Surv Events</span>
-                </div>
-                <div className="p-4 panel soft-ring rounded-3xl flex flex-col items-center justify-center text-center group cursor-default transition-all">
-                  <Shield className="w-4 h-4 text-slate-600 mb-2" />
-                  <span className={`text-lg font-black uppercase tracking-tighter ${riskClass}`}>{risk}</span>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Risk Index</span>
-                </div>
-                <div className="p-4 panel soft-ring rounded-3xl flex flex-col items-center justify-center text-center group cursor-default transition-all">
-                  <Cpu className="w-4 h-4 text-slate-600 mb-2" />
-                  <span className="text-3xl font-black text-blue-400 mono">{speechCount.toString().padStart(2, '0')}</span>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Audio Cues</span>
-                </div>
-                <div className="p-4 panel soft-ring rounded-3xl flex flex-col items-center justify-center text-center group cursor-default transition-all col-span-2 md:col-span-1">
-                  <Sparkles className="w-4 h-4 text-slate-600 mb-2" />
-                  <span className="text-xs font-black text-cyan-400">{r ? 'READY' : '—'}</span>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">System State</span>
-                </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <AnalyzerKpi icon={Users} label="People tracked" value={distinctPeopleCount.toString().padStart(2, '0')} valueClassName="brand-gradient analyzer-mono" />
+                <AnalyzerKpi icon={Bell} label="Security events" value={eventsCount.toString().padStart(2, '0')} valueClassName="text-rose-400 analyzer-mono" />
+                <AnalyzerKpi icon={Shield} label="Risk level" value={risk} valueClassName={`text-base uppercase ${riskClass}`} />
+                <AnalyzerKpi icon={Cpu} label="Audio cues" value={speechCount.toString().padStart(2, '0')} valueClassName="text-sky-400 analyzer-mono" />
+                <AnalyzerKpi icon={Sparkles} label="Analysis" value={r ? 'Ready' : '-'} valueClassName="text-cyan-400 text-sm" hint={r ? 'Metrics loaded' : 'Select a job'} />
               </div>
 
               {/* Charts Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="p-6 panel soft-ring rounded-3xl space-y-4">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                    <TrendingUp className="w-3.5 h-3.5" /> Track Density
+                <div className="p-6 elite-card rounded-3xl space-y-4">
+                  <h4 className="elite-label flex items-center gap-2">
+                    <TrendingUp className="w-3.5 h-3.5" /> Track density
                   </h4>
                   <div className="h-48 relative w-full">
                     <canvas id="density-chart"></canvas>
                   </div>
                 </div>
-                <div className="p-6 panel soft-ring rounded-3xl space-y-4">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                    <Brain className="w-3.5 h-3.5" /> Anomaly Fusion Scoring
+                <div className="p-6 elite-card rounded-3xl space-y-4">
+                  <h4 className="elite-label flex items-center gap-2">
+                    <Brain className="w-3.5 h-3.5" /> Anomaly fusion
                   </h4>
                   <div className="h-48 relative w-full">
                     <canvas id="anomaly-chart"></canvas>
@@ -842,20 +747,20 @@ export default function Dashboard() {
               </div>
 
               {/* Event Ledger */}
-              <div className="panel soft-ring rounded-3xl overflow-hidden border border-white/10">
-                <div className="px-6 py-4 flex items-center justify-between border-b border-[#21262d]">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Security Occurrence Ledger</h4>
+              <div className="elite-card rounded-3xl overflow-hidden border border-white/10">
+                <div className="px-6 py-4 flex items-center justify-between border-b border-white/10">
+                  <h4 className="elite-label">Event ledger</h4>
                   <span className="px-2 py-0.5 bg-white/10 text-slate-300 text-[10px] rounded-full font-mono">{eventsCount} ENTRIES</span>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-separate border-spacing-0 table-sticky">
+                  <table className="w-full text-left text-xs border-separate border-spacing-0 analyzer-table">
                     <thead>
                       <tr className="bg-white/5 backdrop-blur-md">
-                        <th className="px-6 py-3 border-b border-[#21262d] text-slate-500 uppercase font-bold tracking-wider">Timestamp</th>
-                        <th className="px-6 py-3 border-b border-[#21262d] text-slate-500 uppercase font-bold tracking-wider">Severity</th>
-                        <th className="px-6 py-3 border-b border-[#21262d] text-slate-500 uppercase font-bold tracking-wider">Classification</th>
-                        <th className="px-6 py-3 border-b border-[#21262d] text-slate-500 uppercase font-bold tracking-wider">Contextual Description</th>
-                        <th className="px-6 py-3 border-b border-[#21262d] text-slate-500 uppercase font-bold tracking-wider text-right">Conf %</th>
+                        <th className="px-6 py-3 border-b border-white/10 text-slate-500 uppercase font-bold tracking-wider">Timestamp</th>
+                        <th className="px-6 py-3 border-b border-white/10 text-slate-500 uppercase font-bold tracking-wider">Severity</th>
+                        <th className="px-6 py-3 border-b border-white/10 text-slate-500 uppercase font-bold tracking-wider">Classification</th>
+                        <th className="px-6 py-3 border-b border-white/10 text-slate-500 uppercase font-bold tracking-wider">Contextual Description</th>
+                        <th className="px-6 py-3 border-b border-white/10 text-slate-500 uppercase font-bold tracking-wider text-right">Conf %</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#21262d]/50">
@@ -882,64 +787,74 @@ export default function Dashboard() {
                   </table>
                 </div>
               </div>
-            </div>
 
-            {/* Footer Action Header */}
             {r && (
-              <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-black/90 to-transparent flex items-end justify-between border-t border-white/10 animate-in slide-in-from-bottom-5">
-                <div className="max-w-xl">
-                  <h2 className="text-2xl font-black truncate">{r.video_name}</h2>
-                  <p className="text-slate-400 text-xs mt-1">
-                    {Math.floor(r.duration_s || 0)}s Footage // {r.height}p @ {Math.round(r.fps)}fps // {eventsCount} Surveillance Hits
+              <motion.div layout className="elite-card p-5 sm:p-6 flex flex-col lg:flex-row lg:items-end justify-between gap-4 border-cyan-500/20">
+                <div className="min-w-0">
+                  <h2 className="text-xl sm:text-2xl font-bold truncate text-white">{r.video_name}</h2>
+                  <p className="text-gray-400 text-sm mt-1">
+                    {Math.floor(r.duration_s || 0)}s  |   {r.height}p @ {Math.round(r.fps)}fps  |   {eventsCount} events
                   </p>
                 </div>
-                <div className="flex gap-3 flex-wrap justify-end">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 shrink-0">
                   <Link
                     to={`/analyze/results/${currentJobId}`}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/35 font-bold transition-all"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/35 font-semibold text-sm transition-all min-h-[44px]"
                   >
-                    <Brain className="w-4 h-4" /> DEEP ANALYSIS
+                    <Brain className="w-4 h-4" /> Full analysis
                   </Link>
-                  <button onClick={handleDownloadReport} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-slate-700 text-slate-200 border border-white/20 font-bold transition-all">
-                    <FileText className="w-4 h-4" /> EXPORT REPORT
+                  <button type="button" onClick={handleDownloadReport} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-gray-200 border border-white/20 font-semibold text-sm transition-all min-h-[44px]">
+                    <FileText className="w-4 h-4" /> Export report
                   </button>
-                  <button onClick={handleDownloadVideo} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold transition-all shadow-xl shadow-cyan-500/20">
-                    <Download className="w-4 h-4" /> RETRIEVE FOOTAGE
+                  <button type="button" onClick={handleDownloadVideo} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl brand-bg-gradient text-slate-900 font-bold text-sm transition-all shadow-lg shadow-cyan-500/20 min-h-[44px]">
+                    <Download className="w-4 h-4" /> Download video
                   </button>
                 </div>
-              </div>
+              </motion.div>
             )}
-          </section>
 
-          {/* Right Sidebar: Live Alerts Feed */}
-          <aside className="w-72 border-l border-[#21262d] flex-col bg-transparent/40 hidden xl:flex">
-            <div className="p-5 border-b border-[#21262d] bg-white/5 backdrop-blur-md flex items-center justify-between">
-              <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Intel Log
-              </h3>
-              <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></span>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scroll">
-              {alertsFeed.length === 0 ? (
-                <div className="text-center py-20 opacity-20">
-                  <Bell className="w-8 h-8 mx-auto mb-2" />
-                  <p className="text-[10px] font-bold uppercase tracking-widest">Listening for insights</p>
-                </div>
-              ) : (
-                alertsFeed.map((e) => (
-                  <div key={e.id} className={`p-4 rounded-2xl border panel soft-ring ${e.isCrit ? 'bg-rose-500/5 border-rose-500/20' : 'bg-orange-500/5 border-orange-500/20'} animate-in slide-in-from-right-5 duration-300`}>
-                    <div className="flex items-center justify-between mb-1">
-                        <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${e.isCrit ? 'text-rose-500' : 'text-orange-400'}`}>{e.event_type.replace(/_/g, ' ')}</span>
-                        <span className="text-[9px] font-mono text-slate-600">{e.timestamp}</span>
-                    </div>
-                    <p className="text-[11px] text-slate-300 leading-snug">{e.description}</p>
+              {alertsFeed.length > 0 && (
+                <AnalyzerSection title="Live insights" icon={Bell}>
+                  <div className="max-h-48 space-y-2 overflow-y-auto analyzer-scroll">
+                    {alertsFeed.map((e) => (
+                      <div
+                        key={e.id}
+                        className={`analyzer-insight-card ${e.isCrit ? 'analyzer-insight-card--critical' : 'analyzer-insight-card--warn'}`}
+                      >
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className={`text-[10px] font-bold uppercase ${e.isCrit ? 'text-rose-400' : 'text-amber-400'}`}>
+                            {e.event_type.replace(/_/g, ' ')}
+                          </span>
+                          <span className="analyzer-mono text-[10px] text-gray-600">{e.timestamp}</span>
+                        </div>
+                        <p className="text-xs leading-relaxed text-gray-300">{e.description}</p>
+                      </div>
+                    ))}
                   </div>
-                ))
+                </AnalyzerSection>
               )}
             </div>
-          </aside>
-        </main>
-      </div>
+          </section>
+          </div>
+
+          <JobLibraryPanel
+            jobs={displayJobs}
+            filteredJobs={filteredJobs}
+            uploadsByJob={uploadsByJob}
+            jobQuery={jobQuery}
+            onJobQueryChange={setJobQuery}
+            jobFilter={jobFilter}
+            onJobFilterChange={setJobFilter}
+            currentJobId={currentJobId}
+            runningCount={runningCount}
+            onRefresh={loadJobs}
+            onOpen={handleOpenJob}
+            onPreview={loadJobData}
+            onDelete={handleDeleteJob}
+          />
+
+        </div>
+      </motion.div>
     </>
   );
 }

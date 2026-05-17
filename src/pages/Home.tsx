@@ -1,290 +1,293 @@
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
   Brain,
   ShieldCheck,
-  Sparkles,
   CheckCircle2,
   Eye,
   Mic,
   FileText,
   Film,
-  Layers,
-  Lock,
-  Zap,
-  BarChart3,
-  Users,
+  Upload,
+  PlayCircle,
+  BookOpen,
 } from 'lucide-react';
 import Hero from '../components/Hero';
 import { HeroButtonPrimary, HeroButtonSecondary } from '../components/PageHero';
 import { useAuth } from '../contexts/AuthContext';
+import { openAuthModal } from '../lib/openAuth';
 
-const fadeUp = (delay = 0) => ({
-  initial: { opacity: 0, y: 28 },
-  whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true, margin: '-60px' },
-  transition: { duration: 0.55, delay },
-});
-
-const METRICS = [
-  { value: '6+', label: 'Fused AI models', icon: Layers },
-  { value: '250+', label: 'Brand references', icon: Eye },
-  { value: '99', label: 'Speech languages', icon: Mic },
-  { value: '<10 min', label: 'Typical review time', icon: Zap },
-];
+const fadeUp = (delay = 0, reduceMotion: boolean | null = false) =>
+  reduceMotion
+    ? {}
+    : {
+        initial: { opacity: 0, y: 20 },
+        whileInView: { opacity: 1, y: 0 },
+        viewport: { once: true, margin: '-48px' },
+        transition: { duration: 0.45, delay },
+      };
 
 const STEPS = [
   {
-    step: '01',
-    title: 'Ingest footage',
-    desc: 'Upload MP4/MOV from CCTV, body-cam, or archive. Optional Supabase storage keeps your library organized.',
+    title: 'Upload your video',
+    desc: 'MP4 or MOV from CCTV, body-cam, or archive. Drag and drop in the analyzer.',
+    icon: Upload,
   },
   {
-    step: '02',
-    title: 'Multimodal analysis',
-    desc: 'Vision, audio, speech, and fusion run in one pipeline — tracks, events, transcripts, and risk scores aligned on a timeline.',
+    title: 'AI runs the full pipeline',
+    desc: 'Vision, audio, speech, and fusion on one timeline — with live progress you can follow.',
+    icon: Brain,
   },
   {
-    step: '03',
-    title: 'Defensible outputs',
-    desc: 'Export labeled video, premium HTML report, and RAG JSON for audits, briefings, and downstream automation.',
+    title: 'Review and export',
+    desc: 'Labeled video, HTML report, and JSON — ready for briefings and handoffs.',
+    icon: FileText,
   },
 ];
 
-const CAPABILITIES = [
-  { icon: Eye, title: 'Object & person intelligence', desc: 'Detection, segmentation, and persistent tracking with confidence at every frame.' },
-  { icon: Brain, title: 'Scene & action context', desc: 'Activity understanding, anomaly scoring, and severity-ranked surveillance events.' },
-  { icon: Mic, title: 'Multilingual speech', desc: 'Whisper-powered transcription with per-segment language detection and noise filtering.' },
-  { icon: ShieldCheck, title: 'Cross-modal fusion', desc: 'Correlate visual and audio evidence so alerts are explainable, not black-box.' },
-  { icon: FileText, title: 'Premium reports', desc: 'Stakeholder-ready HTML with timelines, key findings, and exportable evidence chains.' },
-  { icon: Lock, title: 'Privacy-first design', desc: 'Your uploads stay scoped to your account. No facial recognition in the core pipeline.' },
+const FEATURES = [
+  {
+    icon: Eye,
+    title: 'Objects & people',
+    desc: 'Detection, tracking, and confidence on every frame.',
+  },
+  {
+    icon: Mic,
+    title: 'Speech & audio',
+    desc: 'Transcripts with language detection and scene audio cues.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Explainable alerts',
+    desc: 'Events ranked by severity with timestamps you can verify.',
+  },
+  {
+    icon: Film,
+    title: 'Trusted exports',
+    desc: 'Video overlays, reports, and structured JSON in one job.',
+  },
 ];
 
-const DELIVERABLES = [
-  { icon: Film, title: 'Labeled video', desc: 'Bounding boxes, tracks, and on-screen context for rapid review.' },
-  { icon: FileText, title: 'Investigation report', desc: 'Executive summary, severity breakdown, and event narrative.' },
-  { icon: BarChart3, title: 'RAG JSON', desc: 'Structured output for chat assistants, ticketing, and SIEM workflows.' },
+const QUICK_LINKS = [
+  { to: '/demo', label: 'Live demo', icon: PlayCircle },
+  { to: '/capabilities', label: 'Capabilities', icon: BookOpen },
+  { to: '/analyze', label: 'Analyzer', icon: Upload },
 ];
+
+function SectionHeader({
+  label,
+  title,
+  description,
+  titleId,
+  className = '',
+}: {
+  label: string;
+  title: string;
+  description?: string;
+  titleId?: string;
+  className?: string;
+}) {
+  return (
+    <header className={`text-center max-w-2xl mx-auto ${className}`}>
+      <p className="elite-label mb-3">{label}</p>
+      <h2
+        id={titleId}
+        className="text-xl sm:text-2xl lg:text-3xl font-bold text-white tracking-tight leading-snug"
+      >
+        {title}
+      </h2>
+      {description && (
+        <p className="mt-3 text-sm sm:text-base text-gray-400 leading-relaxed">{description}</p>
+      )}
+    </header>
+  );
+}
 
 export default function Home() {
   const { user } = useAuth();
+  const reduceMotion = useReducedMotion();
+
+  const primaryCta = user ? (
+    <HeroButtonPrimary to="/analyze" className="w-full sm:w-auto min-h-[48px]">
+      Open analyzer <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+    </HeroButtonPrimary>
+  ) : (
+    <HeroButtonPrimary
+      onClick={() => openAuthModal('signup')}
+      className="w-full sm:w-auto min-h-[48px]"
+    >
+      Get started free <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+    </HeroButtonPrimary>
+  );
 
   return (
-    <motion.div className="bg-black text-white">
+    <div className="min-h-screen bg-transparent">
       <Hero />
 
-      {/* Trust metrics strip */}
-      <section className="relative border-y border-white/10 bg-gradient-to-b from-cyan-950/20 to-black">
-        <div className="page-shell py-10 sm:py-12">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {METRICS.map(({ value, label, icon: Icon }, i) => (
-              <motion.div
-                key={label}
-                {...fadeUp(i * 0.06)}
-                className="elite-card flex flex-col items-center text-center p-5 sm:p-6"
-              >
-                <Icon className="h-5 w-5 text-cyan-400 mb-3" aria-hidden />
-                <p className="text-2xl sm:text-3xl font-bold text-white tabular-nums">{value}</p>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">{label}</p>
-              </motion.div>
+      {/* Quick navigation — scannable on mobile */}
+      <nav
+        aria-label="Explore Detectra"
+        className="relative border-b border-white/10"
+      >
+        <motion.div
+          {...fadeUp(0, reduceMotion)}
+          className="page-shell py-4 sm:py-5"
+        >
+          <ul className="flex gap-2 sm:gap-3 overflow-x-auto overscroll-x-contain pb-0.5 -mx-1 px-1 snap-x snap-mandatory scrollbar-none">
+            {QUICK_LINKS.map(({ to, label, icon: Icon }) => (
+              <li key={to} className="snap-start shrink-0">
+                <Link
+                  to={to}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-md px-4 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:border-cyan-500/30 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 min-h-[44px]"
+                >
+                  <Icon className="h-4 w-4 text-cyan-400 shrink-0" aria-hidden />
+                  {label}
+                </Link>
+              </li>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Positioning statement */}
-      <section className="section-y">
-        <div className="page-shell-narrow text-center">
-          <motion.p {...fadeUp(0)} className="elite-label mb-4">
-            Built for operators who need proof
-          </motion.p>
-          <motion.h2
-            {...fadeUp(0.06)}
-            className="text-[clamp(1.5rem,4.5vw,2.75rem)] font-extrabold leading-snug tracking-tight text-white"
-          >
-            Surveillance intelligence that stands up in{' '}
-            <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-              briefings, audits, and court-adjacent reviews
-            </span>
-          </motion.h2>
-          <motion.p {...fadeUp(0.12)} className="mt-5 text-gray-400 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
-            Detectra AI is a multimodal analysis platform — not a generic chat wrapper. Every alert ties back to
-            timestamps, modalities, and confidence you can inspect.
-          </motion.p>
-        </div>
-      </section>
+          </ul>
+        </motion.div>
+      </nav>
 
       {/* How it works */}
-      <section className="section-y border-t border-white/5 bg-white/[0.02]">
-        <motion.div className="page-shell">
-          <div className="text-center mb-12 sm:mb-16">
-            <p className="elite-label mb-3">How it works</p>
-            <h2 className="text-2xl sm:text-3xl font-bold text-white">From raw footage to defensible intelligence</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+      <section id="how-it-works" className="section-y scroll-mt-24" aria-labelledby="how-heading">
+        <div className="page-shell">
+          <SectionHeader
+            label="How it works"
+            titleId="how-heading"
+            title="Three steps from footage to evidence"
+            description="No complex setup. Upload, wait for analysis, then review exports in your dashboard."
+            className="mb-10 sm:mb-14"
+          />
+          <ol className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 list-none p-0 m-0">
             {STEPS.map((item, idx) => (
-              <motion.div
-                key={item.step}
-                {...fadeUp(idx * 0.08)}
-                className="elite-card relative p-6 sm:p-8"
+              <motion.li
+                key={item.title}
+                {...fadeUp(idx * 0.06, reduceMotion)}
+                className="elite-card flex flex-col p-5 sm:p-6 h-full"
               >
-                <span className="text-4xl font-black text-cyan-500/20 absolute top-4 right-6">{item.step}</span>
-                <p className="text-cyan-400 font-mono text-sm font-bold mb-3">{item.step}</p>
-                <h3 className="text-lg font-bold text-white mb-2">{item.title}</h3>
-                <p className="text-sm text-gray-400 leading-relaxed">{item.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-          <motion.div {...fadeUp(0.2)} className="mt-10 flex justify-center">
-            <HeroButtonPrimary to={user ? '/analyze' : undefined} onClick={user ? undefined : () => window.dispatchEvent(new CustomEvent('open-auth-modal', { detail: { mode: 'signup' } }))}>
-              Try the analyzer <ArrowRight className="h-4 w-4" />
-            </HeroButtonPrimary>
-          </motion.div>
-        </motion.div>
-      </section>
-
-      {/* Capabilities grid */}
-      <section className="section-y">
-        <motion.div className="page-shell">
-          <motion.div {...fadeUp(0)} className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10 sm:mb-14">
-            <div>
-              <p className="elite-label mb-3">Platform capabilities</p>
-              <h2 className="text-2xl sm:text-3xl font-bold text-white max-w-xl">
-                One pipeline. Every modality. One timeline.
-              </h2>
-            </div>
-            <Link to="/capabilities" className="inline-flex items-center gap-2 text-sm text-cyan-400 hover:text-cyan-300 transition-colors shrink-0">
-              Full capability spec <ArrowRight className="h-4 w-4" />
-            </Link>
-          </motion.div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-            {CAPABILITIES.map((cap, idx) => (
-              <motion.div key={cap.title} {...fadeUp(idx * 0.05)} className="elite-card p-5 sm:p-6 group hover:border-cyan-500/25 transition-colors">
-                <cap.icon className="h-6 w-6 text-cyan-400 mb-4 group-hover:scale-110 transition-transform" />
-                <h3 className="font-semibold text-white mb-2">{cap.title}</h3>
-                <p className="text-sm text-gray-400 leading-relaxed">{cap.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      </section>
-
-      {/* Deliverables */}
-      <section className="section-y border-t border-white/5">
-        <motion.div className="page-shell">
-          <motion.div {...fadeUp(0)} className="text-center mb-10 sm:mb-12">
-            <p className="elite-label mb-3">What you receive</p>
-            <h2 className="text-2xl sm:text-3xl font-bold text-white">Artifacts your team can trust</h2>
-          </motion.div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {DELIVERABLES.map((d, idx) => (
-              <motion.div key={d.title} {...fadeUp(idx * 0.07)} className="elite-card p-6 text-center sm:text-left">
-                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20 mb-4">
-                  <d.icon className="h-6 w-6 text-cyan-400" />
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 border border-cyan-500/20">
+                    <item.icon className="h-5 w-5 text-cyan-400" aria-hidden />
+                  </span>
+                  <span className="text-xs font-bold text-cyan-400/90 tabular-nums">
+                    Step {idx + 1}
+                  </span>
                 </div>
-                <h3 className="font-bold text-white mb-2">{d.title}</h3>
-                <p className="text-sm text-gray-400">{d.desc}</p>
-              </motion.div>
+                <h3 className="text-base sm:text-lg font-semibold text-white mb-2">
+                  {item.title}
+                </h3>
+                <p className="text-sm text-gray-400 leading-relaxed flex-1">{item.desc}</p>
+              </motion.li>
             ))}
-          </div>
-        </motion.div>
-      </section>
-
-      {/* Trust pillars */}
-      <section className="section-y bg-gradient-to-b from-transparent via-cyan-950/10 to-transparent">
-        <motion.div className="page-shell">
-          <motion.div {...fadeUp(0)} className="elite-card p-6 md:p-10">
-            <motion.div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
-              <div className="max-w-xl">
-                <p className="elite-label mb-3">Why teams choose Detectra</p>
-                <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-white">
-                  Professional grade. Operator friendly. Evidence first.
-                </h2>
-                <p className="text-gray-400 mt-3 text-sm sm:text-base leading-relaxed">
-                  Reduce investigation time, standardize shift handoffs, and give leadership reports they can defend.
-                </p>
-              </div>
-              <Link to="/business-case" className="inline-flex items-center gap-2 text-sm font-medium text-cyan-400 hover:text-cyan-300 shrink-0">
-                View business case <ArrowRight className="h-4 w-4" />
-              </Link>
-            </motion.div>
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[
-                { icon: ShieldCheck, title: 'Reliable triage', desc: 'Severity-ranked events with timestamps and track context.' },
-                { icon: Brain, title: 'Explainable AI', desc: 'Confidence scores, fusion corroboration, and event traces.' },
-                { icon: Sparkles, title: 'Premium exports', desc: 'Labeled video, HTML report, and JSON in one job.' },
-              ].map((item, idx) => (
-                <motion.div key={item.title} {...fadeUp(0.05 * idx)} className="rounded-xl border border-white/10 bg-black/30 p-4">
-                  <item.icon className="h-5 w-5 text-cyan-400 mb-2" />
-                  <p className="text-white font-semibold text-sm">{item.title}</p>
-                  <p className="text-gray-500 text-xs mt-1 leading-relaxed">{item.desc}</p>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        </motion.div>
-      </section>
-
-      {/* Social proof / FYP */}
-      <section className="py-12 border-t border-white/10">
-        <motion.div {...fadeUp(0)} className="page-shell flex flex-col sm:flex-row items-center justify-between gap-6 text-center sm:text-left">
-          <motion.div className="flex items-center gap-3">
-            <Users className="h-8 w-8 text-cyan-400/80 shrink-0" />
-            <div>
-              <p className="text-white font-semibold text-sm">University of Central Punjab · BSAI FYP</p>
-              <p className="text-gray-500 text-xs mt-0.5">Research-grade pipeline · Production-minded UX</p>
-            </div>
-          </motion.div>
-          <div className="flex flex-wrap justify-center gap-2">
-            {['Multimodal fusion', 'Open models', 'Self-hostable', 'Vercel + GPU ready'].map((tag) => (
-              <span key={tag} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-gray-400">
-                {tag}
-              </span>
-            ))}
-          </div>
-        </motion.div>
-      </section>
-
-      {/* Final CTA */}
-      <section className="section-y relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-t from-cyan-900/15 via-transparent to-transparent pointer-events-none" />
-        <motion.div {...fadeUp(0)} className="page-shell-narrow relative z-10 text-center flex flex-col items-center">
-          <p className="elite-label mb-4">Get started</p>
-          <h2 className="text-[clamp(1.5rem,5vw,2.75rem)] font-extrabold tracking-tight mb-4 sm:mb-6">
-            One video. Proof in minutes.
-          </h2>
-          <p className="text-gray-400 text-base sm:text-lg mb-8 max-w-xl">
-            Upload a clip, run the full v5 stack, and walk away with intelligence your team can stand behind.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            {user ? (
-              <HeroButtonPrimary to="/analyze" className="w-full sm:w-auto">
-                Open analyzer <ArrowRight className="h-4 w-4" />
-              </HeroButtonPrimary>
-            ) : (
-              <HeroButtonPrimary onClick={() => window.dispatchEvent(new CustomEvent('open-auth-modal', { detail: { mode: 'signup' } }))} className="w-full sm:w-auto">
-                Start free <ArrowRight className="h-4 w-4" />
-              </HeroButtonPrimary>
-            )}
-            <HeroButtonSecondary to="/demo" className="w-full sm:w-auto">
-              Watch live demo
+          </ol>
+          <motion.div
+            {...fadeUp(0.15, reduceMotion)}
+            className="mt-8 sm:mt-10 flex flex-col sm:flex-row items-center justify-center gap-3"
+          >
+            {primaryCta}
+            <HeroButtonSecondary to="/demo" className="w-full sm:w-auto min-h-[48px]">
+              See a demo first
             </HeroButtonSecondary>
-          </div>
-          <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-3xl">
-            {[
-              'Multimodal evidence on one timeline',
-              'Labeled video + report + JSON exports',
-              'Confidence scoring for human review',
-            ].map((point) => (
-              <div key={point} className="flex items-start gap-2 rounded-xl border border-white/10 bg-black/40 p-3 text-left">
-                <CheckCircle2 className="h-4 w-4 text-cyan-400 mt-0.5 shrink-0" />
-                <p className="text-xs text-gray-300 leading-relaxed">{point}</p>
-              </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Core features */}
+      <section className="section-y border-t border-white/5" aria-labelledby="features-heading">
+        <motion.div className="page-shell">
+          <SectionHeader
+            label="What you get"
+            titleId="features-heading"
+            title="Everything on one timeline"
+            description="Multimodal analysis designed for security and operations teams — not a generic chat bot."
+            className="mb-10 sm:mb-12"
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+            {FEATURES.map((cap, idx) => (
+              <motion.article
+                key={cap.title}
+                {...fadeUp(idx * 0.05, reduceMotion)}
+                className="elite-card p-5 sm:p-6 flex gap-4 items-start"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 border border-cyan-500/20">
+                  <cap.icon className="h-5 w-5 text-cyan-400" aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-white text-sm sm:text-base mb-1">
+                    {cap.title}
+                  </h3>
+                  <p className="text-sm text-gray-400 leading-relaxed">{cap.desc}</p>
+                </div>
+              </motion.article>
             ))}
           </div>
+          <motion.p
+            {...fadeUp(0.12, reduceMotion)}
+            className="mt-8 text-center"
+          >
+            <Link
+              to="/capabilities"
+              className="inline-flex items-center gap-2 text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors min-h-[44px]"
+            >
+              View full capability list <ArrowRight className="h-4 w-4" />
+            </Link>
+          </motion.p>
         </motion.div>
       </section>
-    </motion.div>
+
+      {/* Trust + CTA */}
+      <section className="section-y border-t border-white/5" aria-labelledby="cta-heading">
+        <motion.div
+          {...fadeUp(0, reduceMotion)}
+          className="page-shell-narrow text-center"
+        >
+          <div className="elite-card p-6 sm:p-10 lg:p-12">
+            <h2
+              id="cta-heading"
+              className="text-xl sm:text-2xl lg:text-3xl font-bold text-white tracking-tight"
+            >
+              Ready to analyze your first clip?
+            </h2>
+            <p className="mt-3 text-sm sm:text-base text-gray-400 max-w-lg mx-auto leading-relaxed">
+              Sign in, upload a video, and receive labeled output plus a report — typically within minutes.
+            </p>
+
+            <ul className="mt-6 flex flex-col sm:flex-row sm:flex-wrap justify-center gap-2 sm:gap-4 text-left sm:text-center max-w-xl mx-auto">
+              {[
+                'Progress updates while you wait',
+                'Private to your account',
+                'Video, report, and JSON exports',
+              ].map((point) => (
+                <li
+                  key={point}
+                  className="flex items-center gap-2 text-xs sm:text-sm text-gray-300 sm:flex-1 sm:justify-center sm:min-w-[10rem]"
+                >
+                  <CheckCircle2 className="h-4 w-4 text-cyan-400 shrink-0" aria-hidden />
+                  {point}
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+              {primaryCta}
+              {!user && (
+                <HeroButtonSecondary
+                  onClick={() => openAuthModal('signin')}
+                  className="w-full sm:w-auto min-h-[48px]"
+                >
+                  Sign in
+                </HeroButtonSecondary>
+              )}
+            </div>
+          </div>
+
+          <p className="mt-8 text-[11px] sm:text-xs text-gray-600">
+            University of Central Punjab · BSAI FYP · Built by Nexariza AI
+          </p>
+        </motion.div>
+      </section>
+    </div>
   );
 }

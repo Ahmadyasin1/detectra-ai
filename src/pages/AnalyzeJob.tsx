@@ -8,8 +8,13 @@ import {
 } from 'lucide-react';
 import { getJobStatus, getJobResult, getWsUrl, JobStatus } from '../lib/detectraApi';
 import { useAuth } from '../contexts/AuthContext';
-import { updateVideoUpload } from '../lib/supabaseDb';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { updateVideoUpload } from '../lib/supabaseDb';
+import { persistJobToUserLibrary } from '../lib/jobPersistence';
+import { addLocalJob, getLocalJobs } from '../lib/localJobSession';
+import { userCanAccessJob } from '../lib/userJobAccess';
+import { friendlyStage } from '../lib/userFacing';
+import UserBanner from '../components/ui/UserBanner';
 
 // ── Pipeline stages ──────────────────────────────────────────────────────────
 
@@ -34,6 +39,11 @@ const STAGES: Stage[] = [
 ];
 
 const STAGE_MAP: Record<string, number> = {
+  queued:           0,
+  initializing:     0,
+  loadingyoloseg:   0,
+  loadingyolopose:  0,
+  modelsready:      0,
   loadingmodels:    0,
   readingvideo:     1,
   startinganalysis: 1,
@@ -52,6 +62,22 @@ function stageIndex(stage: string): number {
   if (!stage) return -1;
   const key = stage.toLowerCase().replace(/[_\s]/g, '');
   return STAGE_MAP[key] ?? 0;
+}
+
+function normalizeJob(j: JobStatus | null): JobStatus | null {
+  if (!j) return null;
+  if (j.status === 'completed' || j.has_result || j.progress >= 100) {
+    return { ...j, status: 'completed', progress: 100, stage: j.stage || 'completed' };
+  }
+  return j;
+}
+
+function isJobDone(j: Partial<JobStatus>): boolean {
+  return j.status === 'completed' || !!j.has_result || (j.progress ?? 0) >= 100;
+}
+
+function isJobFailed(j: Partial<JobStatus>): boolean {
+  return j.status === 'failed';
 }
 
 // ── Circular progress ring ───────────────────────────────────────────────────
@@ -159,133 +185,266 @@ export default function AnalyzeJob() {
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const wsTimeoutRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logEndRef     = useRef<HTMLDivElement>(null);
+  const redirectedRef = useRef(false);
+  const lastLogKeyRef = useRef('');
+  const stalePollsRef = useRef(0);
+  const lastProgressRef = useRef(-1);
 
-  const appendLog = (msg: string) =>
+  const appendLog = (msg: string) => {
+    if (lastLogKeyRef.current === msg) return;
+    lastLogKeyRef.current = msg;
     setLog(prev => [...prev.slice(-79), { time: new Date().toLocaleTimeString(), msg }]);
+  };
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  const stopWs = () => {
+    if (wsPingRef.current) {
+      clearInterval(wsPingRef.current);
+      wsPingRef.current = null;
+    }
+    if (wsTimeoutRef.current) {
+      clearTimeout(wsTimeoutRef.current);
+      wsTimeoutRef.current = null;
+    }
+    if (wsRef.current) {
+      try { wsRef.current.close(); } catch { /* noop */ }
+      wsRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (!jobId) return;
-    let redirected = false;
+    redirectedRef.current = false;
+    lastLogKeyRef.current = '';
+    stalePollsRef.current = 0;
+    lastProgressRef.current = -1;
 
-    const onData = (data: Partial<JobStatus> & { type?: string; error?: string | null }) => {
-      setJob(prev => prev ? { ...prev, ...data } : data as JobStatus);
-      if (data.stage) appendLog(`${data.stage.replace(/_/g, ' ')} — ${data.progress ?? 0}%`);
-      if (data.status === 'completed' && !redirected) {
-        redirected = true;
-        appendLog('Analysis complete — saving results…');
-        if (user && jobId && isSupabaseConfigured) {
-          getJobResult(jobId)
-            .then((result) =>
-              updateVideoUpload(user.id, jobId, { status: 'completed', analysis_results: result }),
-            )
-            .catch(() =>
-              updateVideoUpload(user.id, jobId, { status: 'completed' }).catch(() => {}),
-            );
-        }
-        setTimeout(() => navigate(`/analyze/results/${jobId}`), 1800);
+    const finishAndRedirect = () => {
+      if (redirectedRef.current) return;
+      redirectedRef.current = true;
+      stopPolling();
+      stopWs();
+      appendLog('Analysis complete — opening results');
+      if (user && isSupabaseConfigured) {
+        void persistJobToUserLibrary(user.id, jobId, { archiveLabeledVideo: true });
       }
-      if (data.status === 'failed') {
-        appendLog(`Error: ${data.error || 'Unknown failure'}`);
-        if (user && jobId && isSupabaseConfigured) {
-          updateVideoUpload(user.id, jobId, { status: 'failed' }).catch(() => {});
+      window.setTimeout(() => {
+        navigate(`/analyze/results/${jobId}`, { replace: true });
+      }, 600);
+    };
+
+    const onData = (raw: Partial<JobStatus> & { type?: string; error?: string | null }) => {
+      if (raw.type === 'completed') {
+        const rest = { ...raw };
+        delete (rest as { type?: string }).type;
+        onData({
+          ...rest,
+          status: 'completed',
+          progress: 100,
+          has_result: true,
+          has_report: true,
+          has_video: Boolean((raw as { video_url?: string }).video_url ?? true),
+          stage: 'completed',
+        });
+        return;
+      }
+      setJob((prev) => {
+        const merged =
+          normalizeJob(
+            prev ? ({ ...prev, ...raw } as JobStatus) : (raw as JobStatus),
+          ) ?? (prev ? ({ ...prev, ...raw } as JobStatus) : (raw as JobStatus));
+
+        const stage = merged.stage;
+        const progress = merged.progress ?? 0;
+        if (stage) {
+          appendLog(`${friendlyStage(stage)} — ${Math.round(progress)}%`);
         }
+
+        if (isJobDone(merged)) {
+          queueMicrotask(finishAndRedirect);
+        } else if (isJobFailed(merged)) {
+          queueMicrotask(() => {
+            stopPolling();
+            stopWs();
+            appendLog(`Error: ${merged.error || 'Unknown failure'}`);
+            if (user && isSupabaseConfigured) {
+              updateVideoUpload(user.id, jobId, { status: 'failed' }).catch(() => {});
+            }
+          });
+        }
+
+        return merged;
+      });
+    };
+
+    const poll = async () => {
+      if (redirectedRef.current) return;
+      try {
+        const d = await getJobStatus(jobId);
+        const progress = d.progress ?? 0;
+
+        if (
+          (d.status === 'running' || d.status === 'pending') &&
+          progress === lastProgressRef.current &&
+          progress >= 80
+        ) {
+          stalePollsRef.current += 1;
+        } else {
+          stalePollsRef.current = 0;
+          lastProgressRef.current = progress;
+        }
+
+        if (stalePollsRef.current >= 2 && progress >= 80) {
+          try {
+            await getJobResult(jobId);
+            onData({ ...d, status: 'completed', progress: 100, has_result: true, stage: 'completed' });
+            return;
+          } catch {
+            /* still writing outputs */
+          }
+        }
+
+        onData(d);
+
+        if (isJobDone(d) || isJobFailed(d)) {
+          stopPolling();
+        }
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : String(e));
       }
     };
 
     const startPolling = () => {
       if (pollRef.current) return;
-      const poll = async () => {
-        try {
-          const d = await getJobStatus(jobId);
-          onData(d);
-          if (d.status === 'completed' || d.status === 'failed') {
-            clearInterval(pollRef.current!); pollRef.current = null;
-          }
-        } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)); }
-      };
-      poll();
-      pollRef.current = setInterval(poll, 2500);
+      void poll();
+      pollRef.current = setInterval(poll, 2000);
     };
 
-    // Reset the 30s inactivity timer on each message
     const resetWsTimeout = (ws: WebSocket) => {
       if (wsTimeoutRef.current) clearTimeout(wsTimeoutRef.current);
       wsTimeoutRef.current = setTimeout(() => {
-        appendLog('WebSocket inactive for 30s — switching to polling');
         ws.close();
-        startPolling();
-      }, 30_000);
-    };
-
-    const stopWsPing = () => {
-      if (wsPingRef.current) { clearInterval(wsPingRef.current); wsPingRef.current = null; }
+      }, 45_000);
     };
 
     const tryWs = () => {
       try {
         const ws = new WebSocket(getWsUrl(jobId));
         wsRef.current = ws;
-        ws.onopen    = () => {
+        ws.onopen = () => {
           resetWsTimeout(ws);
-          // Send a ping every 10s so the 30s inactivity timer never fires
-          // during long perception stages (10%→60% with no server messages).
           wsPingRef.current = setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) ws.send('ping');
           }, 10_000);
         };
-        ws.onmessage = e => {
+        ws.onmessage = (e) => {
           resetWsTimeout(ws);
-          try { onData(JSON.parse(e.data)); } catch { /* ignore malformed frame */ }
+          try {
+            onData(JSON.parse(e.data));
+          } catch {
+            /* ignore malformed frame */
+          }
         };
-        ws.onerror   = () => {
+        ws.onerror = () => ws.close();
+        ws.onclose = () => {
           if (wsTimeoutRef.current) clearTimeout(wsTimeoutRef.current);
-          stopWsPing();
-          ws.close(); startPolling();
+          if (wsPingRef.current) {
+            clearInterval(wsPingRef.current);
+            wsPingRef.current = null;
+          }
         };
-        ws.onclose   = () => {
-          if (wsTimeoutRef.current) clearTimeout(wsTimeoutRef.current);
-          stopWsPing();
-          if (!pollRef.current && !redirected) startPolling();
-        };
-      } catch { startPolling(); }
+      } catch {
+        /* polling is the source of truth */
+      }
     };
 
-    getJobStatus(jobId).then(d => {
-      setJob(d);
-      if (d.status === 'completed') { navigate(`/analyze/results/${jobId}`); return; }
-      if (d.status === 'failed') return;
-      tryWs();
-    }).catch(e => setError(e.message || 'Job not found'));
+    const startTracking = async () => {
+      if (user) {
+        const allowed =
+          (await userCanAccessJob(user.id, jobId)) ||
+          getLocalJobs().some((e) => e.job_id === jobId);
+        if (!allowed) {
+          setError('You do not have access to this analysis. It may belong to another account.');
+          return;
+        }
+      }
+
+      try {
+        const d = await getJobStatus(jobId);
+        const normalized = normalizeJob(d);
+        setJob(normalized ?? d);
+        addLocalJob(jobId, d.video_name);
+        if (normalized && isJobDone(normalized)) {
+          finishAndRedirect();
+          return;
+        }
+        if (d.status === 'failed') return;
+        startPolling();
+        tryWs();
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Job not found';
+        setError(
+          msg.includes('403') || msg.toLowerCase().includes('access denied')
+            ? 'You do not have access to this analysis.'
+            : msg,
+        );
+      }
+    };
+
+    void startTracking();
 
     timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
 
     return () => {
-      wsRef.current?.close();
-      stopWsPing();
-      if (pollRef.current)    clearInterval(pollRef.current);
-      if (timerRef.current)   clearInterval(timerRef.current);
-      if (wsTimeoutRef.current) clearTimeout(wsTimeoutRef.current);
+      stopWs();
+      stopPolling();
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId, navigate]);
+  }, [jobId, navigate, user]);
 
   useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [log]);
 
-  const currentStageIdx = job ? stageIndex(job.stage) : -1;
-  const currentStage    = currentStageIdx >= 0 ? STAGES[currentStageIdx] : null;
-  const etaSecs = (job && job.progress > 0 && job.status === 'running')
-    ? Math.round((elapsed / job.progress) * (100 - job.progress))
-    : null;
+  const displayJob = job ? normalizeJob(job) ?? job : null;
+  const status = displayJob?.status ?? 'pending';
+  const progress = displayJob?.progress ?? 0;
+  const currentStageIdx =
+    status === 'completed' ? STAGES.length : displayJob ? stageIndex(displayJob.stage) : -1;
+  const currentStage =
+    currentStageIdx >= 0 && currentStageIdx < STAGES.length ? STAGES[currentStageIdx] : null;
+  const etaSecs =
+    displayJob && progress > 0 && (status === 'running' || status === 'pending')
+      ? Math.round((elapsed / progress) * (100 - progress))
+      : null;
   const fmtElapsed = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+  const isRunning = status === 'running' || status === 'pending';
+  const isDone = status === 'completed';
+  const isFailed = status === 'failed';
 
   return (
     <div className="min-h-screen bg-transparent pt-20 sm:pt-24 pb-[env(safe-area-inset-bottom)]">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
 
-        <Link to="/analyze" className="inline-flex items-center gap-2 text-gray-500 hover:text-cyan-400 transition-colors text-sm mb-8">
+        <Link to="/analyze" className="inline-flex items-center gap-2 text-gray-500 hover:text-cyan-400 transition-colors text-sm mb-4">
           <ArrowLeft className="w-4 h-4" />
-          Analyzer
+          Back to Analyzer
         </Link>
+
+        {isRunning && (
+          <div className="mb-6">
+            <UserBanner variant="info">
+              <p>
+                Analysis can take several minutes for longer videos. Progress updates automatically — you will be redirected to results when finished.
+              </p>
+            </UserBanner>
+          </div>
+        )}
 
         {error ? (
           <div className="text-center py-20">
@@ -295,7 +454,7 @@ export default function AnalyzeJob() {
               <button className="mt-6 btn-dark text-sm">Back to Analyzer</button>
             </Link>
           </div>
-        ) : !job ? (
+        ) : !displayJob ? (
           <div className="text-center py-20">
             <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
             <p className="text-gray-500">Loading job…</p>
@@ -307,20 +466,20 @@ export default function AnalyzeJob() {
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`card-glass p-6 transition-all duration-500 ${
-                job.status === 'running' ? 'border-cyan-500/25 glow-cyan'
-                : job.status === 'completed' ? 'border-green-500/25'
-                : job.status === 'failed' ? 'border-red-500/25'
+              className={`elite-card p-6 sm:p-8 transition-all duration-500 ${
+                isRunning ? 'border-cyan-500/20'
+                : isDone ? 'border-emerald-500/25'
+                : isFailed ? 'border-red-500/25'
                 : ''
               }`}
             >
+              <p className="elite-label mb-3">Analysis in progress</p>
               <div className="flex items-start justify-between gap-4 mb-6">
                 <div className="min-w-0">
-                  <h1 className="text-lg font-bold text-white truncate">{job.video_name}</h1>
-                  <p className="text-gray-600 text-xs mt-0.5 font-mono">{job.job_id}</p>
+                  <h1 className="text-xl font-bold text-white truncate sm:text-2xl">{displayJob.video_name}</h1>
+                  <p className="text-gray-500 text-xs mt-1 font-mono truncate">{displayJob.job_id}</p>
                 </div>
-                {/* Current stage badge */}
-                {currentStage && job.status === 'running' && (
+                {currentStage && isRunning && (
                   <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r ${currentStage.grad} bg-opacity-15 border border-white/10 flex-shrink-0`}>
                     <currentStage.Icon className="w-3.5 h-3.5 text-white" />
                     <span className="text-white text-xs font-medium">{currentStage.label}</span>
@@ -329,55 +488,70 @@ export default function AnalyzeJob() {
               </div>
 
               {/* Circular ring */}
-              <ProgressRing progress={job.progress} status={job.status} currentStage={currentStage} />
+              <ProgressRing progress={progress} status={status} currentStage={currentStage} />
 
-              {/* Status text */}
               <div className="text-center mt-5 space-y-1">
-                {job.status === 'running' || job.status === 'pending' ? (
-                  <p className="text-white font-semibold capitalize">
-                    {(job.stage || 'Initializing').replace(/_/g, ' ')}
+                {isRunning ? (
+                  <p className="text-white font-semibold">
+                    {friendlyStage(displayJob.stage || 'initializing')}
                   </p>
-                ) : job.status === 'completed' ? (
-                  <p className="text-green-400 font-semibold text-lg">Analysis complete! Redirecting…</p>
-                ) : job.status === 'failed' ? (
+                ) : isDone ? (
+                  <p className="text-emerald-400 font-semibold text-lg">Analysis complete — opening results…</p>
+                ) : isFailed ? (
                   <p className="text-red-400 font-semibold">Analysis failed</p>
                 ) : null}
-                {currentStage && job.status === 'running' && (
-                  <p className="text-gray-500 text-xs">{currentStage.sub}</p>
+                {currentStage && isRunning && (
+                  <p className="text-gray-500 text-sm">{currentStage.sub}</p>
                 )}
               </div>
 
-              {/* Info chips */}
               <div className="flex flex-wrap justify-center gap-3 mt-6">
-                <InfoChip icon={Clock}     label="Elapsed"   value={fmtElapsed}                        color="text-gray-400" />
-                {etaSecs !== null && etaSecs > 0 && (
-                  <InfoChip icon={TrendingUp} label="Est. remaining"
+                <InfoChip icon={Clock} label="Elapsed" value={fmtElapsed} color="text-gray-400" />
+                {etaSecs !== null && etaSecs > 0 && isRunning && (
+                  <InfoChip
+                    icon={TrendingUp}
+                    label="Est. remaining"
                     value={etaSecs >= 60 ? `${Math.floor(etaSecs / 60)}m ${etaSecs % 60}s` : `${etaSecs}s`}
-                    color="text-cyan-400" />
+                    color="text-cyan-400"
+                  />
                 )}
-                {job.status === 'running' && (
-                  <InfoChip icon={Zap}       label="Stage"     value={`${currentStageIdx + 1} / ${STAGES.length}`} color="text-purple-400" />
+                {isRunning && (
+                  <InfoChip
+                    icon={Zap}
+                    label="Stage"
+                    value={`${Math.min(currentStageIdx + 1, STAGES.length)} / ${STAGES.length}`}
+                    color="text-purple-400"
+                  />
                 )}
               </div>
+
+              {isRunning && progress >= 85 && (
+                <div className="mt-6 text-center">
+                  <Link to={`/analyze/results/${jobId}`}>
+                    <button type="button" className="text-sm font-medium text-cyan-400 hover:text-cyan-300 underline-offset-2 hover:underline">
+                      Results ready? Open results now
+                    </button>
+                  </Link>
+                </div>
+              )}
             </motion.div>
 
-            {/* ── Pipeline stages ── */}
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.08 }}
-              className="card-glass p-5"
+              className="elite-card p-5 sm:p-6"
             >
-              <div className="flex items-center gap-2 mb-4">
-                <Eye className="w-4 h-4 text-cyan-400" />
-                <h2 className="text-gray-300 text-sm font-semibold uppercase tracking-widest">Pipeline</h2>
-              </div>
+              <motion.div className="flex items-center gap-2 mb-4">
+                <Eye className="h-4 w-4 text-cyan-400" />
+                <h2 className="elite-label mb-0">Pipeline</h2>
+              </motion.div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {STAGES.map((stage, idx) => {
-                  const done   = job.status === 'completed' || idx < currentStageIdx;
-                  const active = job.status !== 'completed' && idx === currentStageIdx;
-                  const pend   = !done && !active;
+                  const done = isDone || idx < currentStageIdx;
+                  const active = isRunning && idx === currentStageIdx;
+                  const pend = !done && !active;
 
                   return (
                     <motion.div
@@ -435,7 +609,7 @@ export default function AnalyzeJob() {
             </motion.div>
 
             {/* ── Error detail ── */}
-            {job.status === 'failed' && job.error && (
+            {isFailed && displayJob.error && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -446,7 +620,7 @@ export default function AnalyzeJob() {
                   Error Details
                 </p>
                 <p className="text-red-400/70 text-sm font-mono break-all bg-black/30 rounded-xl p-3">
-                  {job.error}
+                  {displayJob.error}
                 </p>
                 <Link to="/analyze">
                   <button className="mt-4 btn-dark text-sm">Return to Analyzer</button>
@@ -456,7 +630,7 @@ export default function AnalyzeJob() {
 
             {/* ── Completed card ── */}
             <AnimatePresence>
-              {job.status === 'completed' && (
+              {isDone && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -485,17 +659,17 @@ export default function AnalyzeJob() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="bg-transparent rounded-2xl border border-white/10 p-4"
+                className="elite-card p-4 sm:p-5"
               >
-                <p className="text-gray-600 text-xs font-mono uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <span className="status-dot-active" />
-                  Activity Log
+                <p className="elite-label mb-3 flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" aria-hidden />
+                  Activity log
                 </p>
-                <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                <div className="space-y-1 max-h-36 analyzer-scroll overflow-y-auto pr-1">
                   {log.map((entry, i) => (
-                    <p key={i} className="text-gray-500 text-xs font-mono leading-relaxed">
+                    <p key={`${entry.time}-${entry.msg}-${i}`} className="text-gray-500 text-xs leading-relaxed">
                       <span className="text-gray-700">[{entry.time}]</span>{' '}
-                      <span className="capitalize">{entry.msg}</span>
+                      {entry.msg}
                     </p>
                   ))}
                   <div ref={logEndRef} />

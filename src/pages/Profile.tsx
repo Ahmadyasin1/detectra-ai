@@ -8,8 +8,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserVideoUploads, videoUrlToJobId, type VideoUpload } from '../lib/supabaseDb';
-import SEO from '../components/SEO';
-
 export default function Profile() {
   const { user, profile, loading: authLoading, signOut, updateProfile } = useAuth();
   const navigate = useNavigate();
@@ -25,7 +23,7 @@ export default function Profile() {
   const [uploadsLoading, setUploadsLoading] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !user) navigate('/signin');
+    if (!authLoading && !user) navigate('/signin', { state: { from: { pathname: '/profile' } } });
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
@@ -94,7 +92,6 @@ export default function Profile() {
 
   return (
     <>
-      <SEO title="Profile — Detectra AI" description="Manage your Detectra AI profile and account settings." />
       <div className="min-h-screen pt-24 relative overflow-hidden">
         <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-cyan-500/20 blur-[120px] rounded-full pointer-events-none" />
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
