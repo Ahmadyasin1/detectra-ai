@@ -24,7 +24,8 @@
     "url": "https://github.com/nexariza/detecra-ai.git"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/write-build-version.mjs && vite",
+    "prebuild": "node scripts/write-build-version.mjs",
     "build": "vite build",
     "build:prod": "vite build --mode production",
     "lint": "eslint .",
@@ -44,7 +45,8 @@
     "deploy:check": "npm run typecheck && npm run lint && npm run build:prod",
     "test:api": "node scripts/test-api-integration.mjs",
     "test:api:heroku": "node scripts/test-api-integration.mjs https://detectra-ai-e00ebf89f84f.herokuapp.com",
-    "test:api:local": "node scripts/test-api-integration.mjs http://127.0.0.1:8000"
+    "test:api:local": "node scripts/test-api-integration.mjs http://127.0.0.1:8000",
+    "test:vercel": "node scripts/test-vercel-production.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
