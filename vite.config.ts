@@ -5,8 +5,9 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
-  // Backend API target — falls back to localhost:8000 for local development
-  const apiTarget = env.VITE_API_URL || 'http://127.0.0.1:8000';
+  // Backend API — Heroku by default; override with VITE_API_URL for local API
+  const apiTarget =
+    env.VITE_API_URL || 'https://detectra-ai-e00ebf89f84f.herokuapp.com';
   const wsTarget  = apiTarget.replace(/^https?/, 'ws');
 
   return {

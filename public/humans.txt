@@ -1,0 +1,8 @@
+/* SEO / humans — not displayed in the app UI */
+
+Detectra AI — https://detectra-ai.vercel.app
+Parent: Nexariza AI — https://nexariza.com
+Founder: Ahmad Yasin — Founder @ NEXARIZA-AI
+GitHub: https://github.com/Ahmadyasin1
+API: https://detectra-ai-e00ebf89f84f.herokuapp.com
+Contact: contact@nexariza.com

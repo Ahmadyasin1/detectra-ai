@@ -4,11 +4,37 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://detectra-ai-e00ebf89f84f.herokuapp.com/api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://detectra-ai-e00ebf89f84f.herokuapp.com/health"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
+    {
+      "source": "/detectra-logo.png",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=604800, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(humans.txt|llms.txt|robots.txt|sitemap.xml)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    },
     {
       "source": "/assets/:path*",
       "headers": [

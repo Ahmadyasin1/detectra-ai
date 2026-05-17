@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /analyze
+Disallow: /profile
+Disallow: /analyze/
+
+Sitemap: https://detectra-ai.vercel.app/sitemap.xml

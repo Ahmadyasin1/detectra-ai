@@ -41,7 +41,10 @@
     "clean": "rm -rf dist node_modules/.vite",
     "serve": "vite preview --port 3000",
     "deploy": "npm run build:prod && npm run preview:prod",
-    "deploy:check": "npm run typecheck && npm run lint && npm run build:prod"
+    "deploy:check": "npm run typecheck && npm run lint && npm run build:prod",
+    "test:api": "node scripts/test-api-integration.mjs",
+    "test:api:heroku": "node scripts/test-api-integration.mjs https://detectra-ai-e00ebf89f84f.herokuapp.com",
+    "test:api:local": "node scripts/test-api-integration.mjs http://127.0.0.1:8000"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
