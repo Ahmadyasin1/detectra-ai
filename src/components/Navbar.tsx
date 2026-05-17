@@ -1,69 +1,94 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Menu, X, User, LogOut, ChevronDown, Network, GitBranch, Target, Briefcase } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Menu,
+  X,
+  User,
+  LogOut,
+  ChevronDown,
+  Network,
+  GitBranch,
+  Target,
+  Briefcase,
+  BookOpen,
+} from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import DetectraLogo from './DetectraLogo';
+import { BrandNavLogo } from './BrandNavLogo';
+import { openAuthModal } from '../lib/openAuth';
+
+const MAIN_LINKS = [
+  { label: 'Home', href: '/' },
+  { label: 'Analyzer', href: '/analyze' },
+  { label: 'Demo', href: '/demo' },
+  { label: 'Capabilities', href: '/capabilities' },
+  { label: 'Pricing', href: '/pricing' },
+  { label: 'Contact', href: '/contact' },
+] as const;
+
+const MORE_LINKS = [
+  { label: 'Business Case', href: '/business-case', icon: Briefcase },
+  { label: 'Architecture', href: '/architecture', icon: Network },
+  { label: 'AI Pipeline', href: '/pipeline', icon: GitBranch },
+  { label: 'Research', href: '/research', icon: BookOpen },
+  { label: 'FYP Project', href: '/fyp-project', icon: Target },
+] as const;
+
+const MORE_PATHS = MORE_LINKS.map((l) => l.href);
+
+function linkClass(active: boolean) {
+  return `inline-flex items-center min-h-[40px] px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+    active
+      ? 'text-cyan-400 bg-cyan-500/10'
+      : 'text-gray-400 hover:text-white hover:bg-white/5'
+  }`;
+}
+
+/** Glass dropdown panel — matches site card-glass / previous navbar menus */
+const DROPDOWN_GLASS =
+  'rounded-xl border border-white/10 bg-gradient-to-b from-white/[0.08] to-white/[0.03] backdrop-blur-xl shadow-2xl shadow-black/50 overflow-hidden';
 
 export default function Navbar() {
-  const [isScrolled, setIsScrolled]         = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isUserMenuOpen, setIsUserMenuOpen]   = useState(false);
-  const [isSystemMenuOpen, setIsSystemMenuOpen] = useState(false);
-  const location  = useLocation();
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const location = useLocation();
   const { user, profile, signOut } = useAuth();
-  const navigate  = useNavigate();
+  const navigate = useNavigate();
 
-  const handleScroll = useCallback(() => { setIsScrolled(window.scrollY > 20); }, []);
+  const handleScroll = useCallback(() => {
+    setIsScrolled(window.scrollY > 12);
+  }, []);
 
   useEffect(() => {
-    let ticking = false;
-    const throttled = () => {
-      if (!ticking) {
-        requestAnimationFrame(() => { handleScroll(); ticking = false; });
-        ticking = true;
-      }
-    };
-    window.addEventListener('scroll', throttled, { passive: true });
-    return () => window.removeEventListener('scroll', throttled);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
 
   useEffect(() => {
-    document.body.style.overflow = isMobileMenuOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [isMobileMenuOpen]);
+    document.body.style.overflow = mobileOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
-    setIsMobileMenuOpen(false);
+    setMobileOpen(false);
+    setMoreOpen(false);
+    setUserOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (isUserMenuOpen && !(e.target as HTMLElement).closest('.user-menu-container'))
-        setIsUserMenuOpen(false);
-      if (isSystemMenuOpen && !(e.target as HTMLElement).closest('.system-menu-container'))
-        setIsSystemMenuOpen(false);
+    const onPointerDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (userOpen && !t.closest('[data-nav-user]')) setUserOpen(false);
+      if (moreOpen && !t.closest('[data-nav-more]')) setMoreOpen(false);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [isUserMenuOpen, isSystemMenuOpen]);
-
-  const navItems = [
-    { label: 'Home',        href: '/' },
-    { label: 'Analyzer',    href: '/analyze' },
-    { label: 'Demo',        href: '/demo' },
-    { label: 'Capabilities', href: '/capabilities' },
-    { label: 'Pricing',     href: '/pricing' },
-    { label: 'Contact',     href: '/contact' },
-  ];
-
-  const productItems = [
-    { label: 'Business Case', href: '/business-case', icon: Briefcase, desc: 'ROI, deployment scenarios, value' },
-    { label: 'Architecture', href: '/architecture', icon: Network,   desc: '6-layer system design' },
-    { label: 'AI Pipeline',  href: '/pipeline',     icon: GitBranch, desc: '9-stage inference pipeline' },
-    { label: 'Research',     href: '/research',     icon: Target,    desc: 'Datasets, evidence and methodology' },
-    { label: 'Project',      href: '/fyp-project',  icon: Target,    desc: 'Implementation journey and scope' },
-  ];
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [userOpen, moreOpen]);
 
   const isActive = (href: string) => {
     if (href === '/analyze') {
@@ -72,221 +97,261 @@ export default function Navbar() {
     return location.pathname === href;
   };
 
-  const navClass = `fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-    isScrolled
-      ? 'bg-transparent/95 backdrop-blur-md border-b border-white/10 shadow-[0_1px_30px_rgba(0,0,0,0.5)]'
-      : 'bg-transparent'
-  }`;
+  const moreActive = MORE_PATHS.some((p) => location.pathname === p);
+
+  const shellClass = isScrolled
+    ? 'bg-black/75 backdrop-blur-xl border-b border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.35)]'
+    : 'bg-transparent border-b border-transparent';
 
   return (
-    <motion.nav initial={{ y: -100 }} animate={{ y: 0 }} className={navClass}>
-      <div className="w-full px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16 min-h-16">
+    <header className={`fixed top-0 left-0 right-0 z-50 transition-[background,border,box-shadow] duration-300 ${shellClass}`}>
+      <nav
+        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+        aria-label="Main navigation"
+      >
+        <motion.div
+          className="flex h-16 items-center justify-between gap-3"
+          initial={{ y: -16, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.35 }}
+        >
+          <BrandNavLogo />
 
-          {/* Logo — same full wordmark as Sign Up (icon + DETECTRA AI) */}
-          <motion.div whileHover={{ scale: 1.01 }} className="shrink-0 py-0.5">
-            <DetectraLogo variant="wordmark" showText={false} size="sm" linkToHome />
-          </motion.div>
-
-          {/* Desktop nav links */}
-          <div className="hidden lg:flex items-center gap-0.5">
-            {navItems.map(item => (
-              <Link key={item.label} to={item.href}>
-                <motion.button
-                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                  className={`px-3 py-2 text-sm rounded-lg transition-all duration-200 relative group ${
-                    isActive(item.href)
-                      ? 'text-cyan-400 bg-cyan-500/10'
-                      : 'text-gray-400 hover:text-white hover:bg-white/20'
-                  }`}
-                >
-                  {item.label}
-                  <span className={`absolute bottom-1 left-1/2 -translate-x-1/2 h-px bg-gradient-to-r from-cyan-400 to-blue-500 transition-all duration-200 ${
-                    isActive(item.href) ? 'w-5' : 'w-0 group-hover:w-5'
-                  }`} />
-                </motion.button>
+          {/* Desktop */}
+          <div className="hidden lg:flex flex-1 items-center justify-center gap-0.5 min-w-0">
+            {MAIN_LINKS.map((item) => (
+              <Link key={item.href} to={item.href} className={linkClass(isActive(item.href))}>
+                {item.label}
               </Link>
             ))}
 
-            {/* System dropdown */}
-            <div className="relative system-menu-container">
-              <motion.button
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                onClick={() => setIsSystemMenuOpen(s => !s)}
-                className={`flex items-center gap-1 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
-                  ['/business-case', '/architecture', '/pipeline', '/research', '/fyp-project'].some(p => location.pathname === p)
-                    ? 'text-cyan-400 bg-cyan-500/10'
-                    : 'text-gray-400 hover:text-white hover:bg-white/20'
-                }`}
+            <motion.div className="relative" data-nav-more>
+              <button
+                type="button"
+                onClick={() => setMoreOpen((v) => !v)}
+                aria-expanded={moreOpen}
+                aria-haspopup="true"
+                className={`${linkClass(moreActive)} gap-1`}
               >
-                Product
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isSystemMenuOpen ? 'rotate-180' : ''}`} />
-              </motion.button>
+                More
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${moreOpen ? 'rotate-180' : ''}`}
+                  aria-hidden
+                />
+              </button>
               <AnimatePresence>
-                {isSystemMenuOpen && (
+                {moreOpen && (
                   <motion.div
-                    initial={{ opacity: 0, y: -8 }}
+                    initial={{ opacity: 0, y: -6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    className="absolute top-full left-0 mt-1.5 w-56 bg-white/5 backdrop-blur-md rounded-xl shadow-2xl border border-white/10 overflow-hidden z-50"
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.15 }}
+                    className={`absolute left-0 top-full z-50 mt-1.5 w-56 py-1 ${DROPDOWN_GLASS}`}
+                    role="menu"
                   >
-                    {productItems.map(item => (
-                      <Link key={item.label} to={item.href} onClick={() => setIsSystemMenuOpen(false)}>
-                        <div className={`flex items-start gap-3 px-4 py-3 hover:bg-white/20 transition-colors ${
-                          isActive(item.href) ? 'bg-cyan-500/10' : ''
-                        }`}>
-                          <item.icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isActive(item.href) ? 'text-cyan-400' : 'text-gray-500'}`} />
-                          <div>
-                            <p className={`text-sm font-medium ${isActive(item.href) ? 'text-cyan-400' : 'text-gray-300'}`}>{item.label}</p>
-                            <p className="text-xs text-gray-600 mt-0.5">{item.desc}</p>
-                          </div>
-                        </div>
+                    {MORE_LINKS.map((item) => (
+                      <Link
+                        key={item.href}
+                        to={item.href}
+                        role="menuitem"
+                        onClick={() => setMoreOpen(false)}
+                        className={`flex items-center gap-2.5 px-4 py-3 text-sm transition-colors ${
+                          isActive(item.href)
+                            ? 'text-cyan-400 bg-cyan-500/10'
+                            : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
+                        {item.label}
                       </Link>
                     ))}
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
+            </motion.div>
           </div>
 
-          {/* Desktop auth area — Analyzer lives in main nav; no duplicate shortcut here */}
-          <div className="hidden lg:flex items-center gap-2">
+          {/* Desktop auth */}
+          <div className="hidden lg:flex items-center gap-2 shrink-0">
             {user ? (
-              <div className="relative user-menu-container">
-                <motion.button
-                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                  onClick={() => setIsUserMenuOpen(v => !v)}
-                  className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-gray-700 text-gray-300 hover:text-white rounded-xl border border-white/20 transition-all text-sm"
+              <motion.div className="relative" data-nav-user>
+                <button
+                  type="button"
+                  onClick={() => setUserOpen((v) => !v)}
+                  aria-expanded={userOpen}
+                  className="flex items-center gap-2 min-h-[40px] max-w-[200px] rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-gray-200 hover:bg-white/10 transition-colors"
                 >
-                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">
-                      {(profile?.full_name || user.email || 'U')[0].toUpperCase()}
-                    </span>
-                  </div>
-                  <span className="max-w-[120px] truncate">{profile?.full_name || user.email?.split('@')[0] || 'Profile'}</span>
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
-                </motion.button>
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-cyan-500 to-blue-600 text-xs font-bold text-white">
+                    {(profile?.full_name || user.email || 'U')[0].toUpperCase()}
+                  </span>
+                  <span className="truncate">
+                    {profile?.full_name || user.email?.split('@')[0] || 'Account'}
+                  </span>
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 shrink-0 text-gray-500 transition-transform ${userOpen ? 'rotate-180' : ''}`}
+                    aria-hidden
+                  />
+                </button>
                 <AnimatePresence>
-                  {isUserMenuOpen && (
+                  {userOpen && (
                     <motion.div
-                      initial={{ opacity: 0, y: -8 }}
+                      initial={{ opacity: 0, y: -6 }}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      className="absolute right-0 mt-2 w-48 bg-white/5 backdrop-blur-md rounded-xl shadow-2xl border border-white/10 overflow-hidden z-50"
+                      exit={{ opacity: 0, y: -6 }}
+                      className={`absolute right-0 top-full z-50 mt-2 w-48 py-1 ${DROPDOWN_GLASS}`}
                     >
-                      <Link to="/profile" onClick={() => setIsUserMenuOpen(false)}>
-                        <div className="flex items-center gap-2 px-4 py-3 text-gray-300 hover:bg-white/20 hover:text-white transition-colors text-sm">
-                          <User className="w-4 h-4" />My Profile
-                        </div>
+                      <Link
+                        to="/profile"
+                        onClick={() => setUserOpen(false)}
+                        className="flex items-center gap-2 px-4 py-3 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                      >
+                        <User className="h-4 w-4" aria-hidden />
+                        Profile
                       </Link>
-                      <div className="border-t border-white/10" />
                       <button
+                        type="button"
                         onClick={async () => {
-                          try { await signOut(); } catch { /* ignore */ }
-                          setIsUserMenuOpen(false);
+                          try {
+                            await signOut();
+                          } catch {
+                            /* ignore */
+                          }
+                          setUserOpen(false);
                           navigate('/');
                         }}
-                        className="w-full flex items-center gap-2 px-4 py-3 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors text-sm"
+                        className="flex w-full items-center gap-2 px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 transition-colors border-t border-white/10"
                       >
-                        <LogOut className="w-4 h-4" />Sign Out
+                        <LogOut className="h-4 w-4" aria-hidden />
+                        Sign out
                       </button>
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
+              </motion.div>
             ) : (
-              <motion.button
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                onClick={() => window.dispatchEvent(new CustomEvent('open-auth-modal', { detail: { mode: 'signup' } }))}
-                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-cyan-500/25 transition-all text-sm"
-              >
-                Get Started Free
-              </motion.button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => openAuthModal('signin')}
+                  className="min-h-[40px] px-3 text-sm font-medium text-gray-300 hover:text-white transition-colors"
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAuthModal('signup')}
+                  className="min-h-[40px] rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 px-4 text-sm font-semibold text-white hover:shadow-lg hover:shadow-cyan-500/20 transition-shadow"
+                >
+                  Get started
+                </button>
+              </>
             )}
           </div>
 
-          {/* Mobile menu toggle */}
+          {/* Mobile menu button */}
           <button
-            onClick={() => setIsMobileMenuOpen(v => !v)}
-            className="lg:hidden text-gray-400 hover:text-white p-2 hover:bg-white/20 rounded-xl transition-all"
+            type="button"
+            className="lg:hidden flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 hover:bg-white/5 hover:text-white"
+            onClick={() => setMobileOpen((v) => !v)}
+            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileOpen}
           >
-            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
-        </div>
-      </div>
+        </motion.div>
+      </nav>
 
-      {/* Mobile menu */}
+      {/* Mobile panel */}
       <AnimatePresence>
-        {isMobileMenuOpen && (
+        {mobileOpen && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="lg:hidden bg-black/95 backdrop-blur-md border-b border-white/10 max-h-[min(85vh,640px)] overflow-y-auto overscroll-contain"
+            className="lg:hidden border-b border-white/10 bg-black/95 backdrop-blur-xl overflow-hidden"
           >
-            <div className="px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-1">
-              {navItems.map(item => (
-                <Link key={item.label} to={item.href}>
-                  <button
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl transition-all text-sm ${
-                      isActive(item.href)
-                        ? 'text-cyan-400 bg-cyan-500/10'
-                        : 'text-gray-400 hover:text-white hover:bg-white/20'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
+            <div className="max-w-7xl mx-auto px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-1">
+              {user ? (
+                <Link to="/analyze" onClick={() => setMobileOpen(false)}>
+                  <span className="mb-3 flex min-h-[44px] w-full items-center justify-center rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-sm font-semibold text-white">
+                    Open analyzer
+                  </span>
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileOpen(false);
+                    openAuthModal('signup');
+                  }}
+                  className="mb-3 flex min-h-[44px] w-full items-center justify-center rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-sm font-semibold text-white"
+                >
+                  Get started free
+                </button>
+              )}
+
+              {MAIN_LINKS.map((item) => (
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium ${linkClass(isActive(item.href))}`}
+                >
+                  {item.label}
                 </Link>
               ))}
-              <div className="pt-1">
-                <p className="px-3 text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">Product</p>
-                {productItems.map(item => (
-                  <Link key={item.label} to={item.href}>
-                    <button
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className={`flex items-center gap-2 w-full text-left px-3 py-2.5 rounded-xl transition-all text-sm ${
-                        isActive(item.href)
-                          ? 'text-cyan-400 bg-cyan-500/10'
-                          : 'text-gray-400 hover:text-white hover:bg-white/20'
-                      }`}
-                    >
-                      <item.icon className="w-4 h-4 flex-shrink-0" />{item.label}
-                    </button>
-                  </Link>
-                ))}
-              </div>
-              <div className="border-t border-white/10 pt-2 mt-2 space-y-1">
+
+              <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+                More
+              </p>
+              {MORE_LINKS.map((item) => (
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm font-medium ${linkClass(isActive(item.href))}`}
+                >
+                  <item.icon className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
+                  {item.label}
+                </Link>
+              ))}
+
+              <div className="border-t border-white/10 pt-3 mt-2">
                 {user ? (
                   <>
-                    <Link to="/profile">
-                      <button
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className="w-full text-left px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/20 transition-all text-sm"
-                      >
-                        My Profile
-                      </button>
+                    <Link
+                      to="/profile"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex min-h-[44px] items-center rounded-lg px-3 text-sm text-gray-400 hover:bg-white/5 hover:text-white"
+                    >
+                      Profile
                     </Link>
                     <button
+                      type="button"
                       onClick={async () => {
-                        try { await signOut(); } catch { /* ignore */ }
-                        setIsMobileMenuOpen(false);
+                        try {
+                          await signOut();
+                        } catch {
+                          /* ignore */
+                        }
+                        setMobileOpen(false);
                         navigate('/');
                       }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl text-red-400 hover:bg-red-500/10 transition-all text-sm"
+                      className="flex min-h-[44px] w-full items-center rounded-lg px-3 text-sm text-red-400 hover:bg-red-500/10"
                     >
-                      Sign Out
+                      Sign out
                     </button>
                   </>
                 ) : (
                   <button
+                    type="button"
                     onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      window.dispatchEvent(new CustomEvent('open-auth-modal', { detail: { mode: 'signup' } }));
+                      setMobileOpen(false);
+                      openAuthModal('signin');
                     }}
-                    className="w-full px-3 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl font-semibold text-sm"
+                    className="flex min-h-[44px] w-full items-center justify-center rounded-lg border border-white/10 text-sm font-medium text-gray-300"
                   >
-                    Get Started Free
+                    Sign in
                   </button>
                 )}
               </div>
@@ -294,7 +359,6 @@ export default function Navbar() {
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.nav>
+    </header>
   );
 }
-

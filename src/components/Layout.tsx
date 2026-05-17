@@ -4,12 +4,17 @@ import Footer from './Footer';
 import ParticleBackground from './ParticleBackground';
 import CursorTrail from './CursorTrail';
 import ScrollToTop from './ScrollToTop';
+import ScrollRestoration from './ScrollRestoration';
 import PerformanceOptimizer from './PerformanceOptimizer';
 import AuthModal from './AuthModal';
+import RouteSEO from './RouteSEO';
+import SkipToContent from './ui/SkipToContent';
 
 export default function Layout() {
   return (
     <div className="min-h-screen bg-black text-white overflow-x-hidden">
+      <SkipToContent />
+      <RouteSEO />
       <PerformanceOptimizer />
       <ParticleBackground />
       {/* Site-wide ambient glow — matches Home / Hero treatment */}
@@ -18,9 +23,10 @@ export default function Layout() {
         <div className="absolute bottom-[-18%] left-1/2 -translate-x-1/2 w-[min(95vw,48rem)] h-[min(42vh,24rem)] bg-blue-600/[0.12] blur-[120px] rounded-full opacity-90" />
       </div>
       <CursorTrail />
+      <ScrollRestoration />
       <AuthModal />
       <Navbar />
-      <main className="relative z-10 min-w-0 w-full">
+      <main id="main-content" tabIndex={-1} className="relative z-10 min-w-0 w-full outline-none">
         <Outlet />
       </main>
       <Footer />

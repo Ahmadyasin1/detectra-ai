@@ -1,200 +1,157 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   DETECTRA_BRAND_NAME,
-  DETECTRA_LOGO_MARK_2X_SRC,
-  DETECTRA_LOGO_MARK_SRC,
   DETECTRA_LOGO_SRC,
   DETECTRA_TAGLINE,
 } from '../constants/branding';
 
-export type LogoSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
-export type LogoVariant = 'mark' | 'wordmark';
+export type LogoSize = 'xs' | 'sm' | 'auth' | 'md' | 'lg' | 'xl' | '2xl';
 
-/** Icon frame — padding keeps the full mark visible without oversizing the bar. */
-const MARK_FRAME: Record<LogoSize, string> = {
-  xs: 'h-8 w-8 p-0.5',
-  sm: 'h-10 w-10 p-0.5',
-  md: 'h-11 w-11 p-0.5',
-  lg: 'h-12 w-12 p-0.5',
-  xl: 'h-14 w-14 p-1',
-  '2xl': 'h-16 w-16 p-1',
+const FRAME: Record<LogoSize, string> = {
+  xs: 'h-8 max-w-[88px]',
+  sm: 'h-9 max-w-[104px]',
+  auth: 'h-9 max-w-[108px]',
+  md: 'h-11 max-w-[128px]',
+  lg: 'h-14 max-w-[168px]',
+  xl: 'h-[4.25rem] max-w-[220px]',
+  '2xl': 'h-20 max-w-[280px]',
 };
 
-/** Stacked icon + “DETECTRA AI” image — height-capped, width auto (full logo visible). */
-const WORDMARK_FRAME: Record<LogoSize, string> = {
-  xs: 'max-h-9 w-auto max-w-[4.75rem]',
-  sm: 'max-h-11 w-auto max-w-[5.5rem]',
-  md: 'max-h-[3.25rem] w-auto max-w-[7.25rem]',
-  lg: 'max-h-[4.75rem] w-auto max-w-[15rem]',
-  xl: 'max-h-[5.5rem] w-auto max-w-[17.5rem]',
-  '2xl': 'max-h-24 w-auto max-w-[20rem]',
-};
+const IMG_CLASS =
+  'h-full w-auto max-w-full object-contain object-left select-none brightness-[1.06] contrast-[1.05] saturate-[1.1] drop-shadow-[0_2px_24px_rgba(34,211,238,0.35)]';
 
-const TEXT_CLASS: Record<LogoSize, string> = {
-  xs: 'text-sm',
-  sm: 'text-base',
-  md: 'text-lg',
-  lg: 'text-xl',
-  xl: 'text-2xl',
-  '2xl': 'text-3xl',
-};
-
-const TAGLINE_CLASS: Record<LogoSize, string> = {
-  xs: 'text-[10px]',
-  sm: 'text-[11px]',
-  md: 'text-xs',
-  lg: 'text-xs',
-  xl: 'text-sm',
-  '2xl': 'text-sm',
-};
-
-/** Crisp on dark backgrounds — no heavy drop-shadow (avoids muddy box). */
-const MARK_IMG =
-  'block max-h-full max-w-full h-auto w-auto object-contain object-center select-none';
-
-const WORDMARK_IMG =
-  'block h-full w-auto max-w-full object-contain object-center select-none';
-
-type DetectraLogoProps = {
+type LogoBaseProps = {
   size?: LogoSize;
-  variant?: LogoVariant | 'auto';
-  showText?: boolean;
-  tagline?: string | null;
-  className?: string;
-  imgClassName?: string;
-  linkToHome?: boolean;
-  /** Soft glow behind icon — use on marketing sections, not the compact navbar. */
-  glow?: boolean;
-  /** Tighter row for header (smaller type, optional tagline). */
-  compact?: boolean;
-};
-
-function resolveVariant(variant: LogoVariant | 'auto', showText: boolean): LogoVariant {
-  if (variant !== 'auto') return variant;
-  return showText ? 'mark' : 'wordmark';
-}
-
-export function DetectraLogoMark({
-  size = 'md',
-  variant = 'mark',
-  className = '',
-  imgClassName = '',
-  alt = `${DETECTRA_BRAND_NAME} logo`,
-  glow = false,
-}: {
-  size?: LogoSize;
-  variant?: LogoVariant;
   className?: string;
   imgClassName?: string;
   alt?: string;
   glow?: boolean;
-}) {
-  const isMark = variant === 'mark';
-  const src = isMark ? DETECTRA_LOGO_MARK_SRC : DETECTRA_LOGO_SRC;
-  const srcSet = isMark
-    ? `${DETECTRA_LOGO_MARK_SRC} 1x, ${DETECTRA_LOGO_MARK_2X_SRC} 2x`
-    : undefined;
-  const frame = isMark ? MARK_FRAME[size] : WORDMARK_FRAME[size];
+};
+
+/** Brand wordmark — always uses `/detectra-logo.png`. */
+export function DetectraLogoMark({
+  size = 'md',
+  className = '',
+  imgClassName = '',
+  alt = `${DETECTRA_BRAND_NAME} logo`,
+  glow = false,
+}: LogoBaseProps) {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  const img = imgFailed ? (
+    <span
+      className={`flex h-full items-center text-sm font-bold tracking-tight text-cyan-300 ${imgClassName}`}
+      aria-label={alt}
+    >
+      {DETECTRA_BRAND_NAME}
+    </span>
+  ) : (
+    <img
+      src={DETECTRA_LOGO_SRC}
+      alt={alt}
+      width={280}
+      height={80}
+      className={`${IMG_CLASS} ${imgClassName}`}
+      decoding="async"
+      loading="eager"
+      fetchPriority="high"
+      onError={() => setImgFailed(true)}
+    />
+  );
 
   return (
     <span
-      className={`relative inline-flex items-center justify-center shrink-0 overflow-visible ${
-        isMark ? frame : `h-auto ${frame}`
-      } ${className}`}
+      className={`inline-flex items-center justify-start shrink-0 ${FRAME[size]} ${className}`}
     >
-      {glow && isMark && (
-        <span
-          className="pointer-events-none absolute inset-0 rounded-full bg-cyan-400/20 blur-lg scale-90"
-          aria-hidden
-        />
+      {glow ? (
+        <span className="relative inline-flex h-full w-full items-center">
+          <span
+            aria-hidden
+            className="absolute inset-0 scale-110 rounded-full bg-cyan-400/12 blur-xl"
+          />
+          <span className="relative">{img}</span>
+        </span>
+      ) : (
+        img
       )}
-      <img
-        src={src}
-        srcSet={srcSet}
-        alt={alt}
-        className={`relative z-[1] ${isMark ? MARK_IMG : WORDMARK_IMG} ${imgClassName}`}
-        decoding="async"
-        loading="eager"
-        fetchPriority="high"
-      />
     </span>
   );
 }
 
+/** Navbar — wordmark links home. */
+export function DetectraNavLogo({ className = '' }: { className?: string }) {
+  return (
+    <Link
+      to="/"
+      className={`inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 rounded-lg ${className}`}
+      aria-label={`${DETECTRA_BRAND_NAME} home`}
+    >
+      <DetectraLogoMark size="md" />
+    </Link>
+  );
+}
+
+type DetectraLogoProps = LogoBaseProps & {
+  tagline?: string | null;
+  showTagline?: boolean;
+  linkToHome?: boolean;
+};
+
+/** Footer / marketing — logo with optional tagline. */
 export default function DetectraLogo({
   size = 'sm',
-  variant = 'auto',
-  showText = true,
-  tagline = DETECTRA_TAGLINE,
   className = '',
   imgClassName = '',
+  tagline = DETECTRA_TAGLINE,
+  showTagline = false,
   linkToHome = false,
   glow = false,
-  compact = false,
 }: DetectraLogoProps) {
-  const resolved = resolveVariant(variant, showText);
-  const markSize = size;
-
-  if (resolved === 'wordmark') {
-    const wordmark = (
-      <DetectraLogoMark
-        size={size}
-        variant="wordmark"
-        className={className}
-        imgClassName={imgClassName}
-      />
-    );
-    if (linkToHome) {
-      return (
-        <Link
-          to="/"
-          className="inline-flex outline-none rounded-md focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-400/70"
-        >
-          {wordmark}
-        </Link>
-      );
-    }
-    return wordmark;
-  }
-
   const inner = (
-    <div className={`flex items-center min-w-0 ${compact ? 'gap-2.5' : 'gap-3'} ${className}`}>
-      <DetectraLogoMark
-        size={markSize}
-        variant="mark"
-        imgClassName={imgClassName}
-        glow={glow}
-      />
-      {showText && (
-        <div className="flex flex-col justify-center leading-snug min-w-0">
-          <span className={`text-white font-semibold tracking-tight ${TEXT_CLASS[size]}`}>
-            {DETECTRA_BRAND_NAME}
-          </span>
-          {tagline && (
-            <span
-              className={
-                compact
-                  ? 'hidden lg:block text-[10px] leading-tight text-slate-400 mt-0.5 truncate max-w-[12rem]'
-                  : `hidden sm:block text-slate-400 font-normal truncate ${TAGLINE_CLASS[size]}`
-              }
-            >
-              {tagline}
-            </span>
-          )}
-        </div>
-      )}
-    </div>
+    <LogoWithTagline
+      size={size}
+      className={className}
+      imgClassName={imgClassName}
+      tagline={showTagline ? tagline : null}
+      glow={glow}
+    />
   );
 
   if (linkToHome) {
     return (
       <Link
         to="/"
-        className="inline-flex outline-none rounded-md focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-400/70"
+        className="inline-flex focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 rounded-lg"
       >
         {inner}
       </Link>
     );
   }
   return inner;
+}
+
+function LogoWithTagline({
+  size,
+  className,
+  imgClassName,
+  tagline,
+  glow,
+}: {
+  size: LogoSize;
+  className: string;
+  imgClassName: string;
+  tagline: string | null;
+  glow: boolean;
+}) {
+  return (
+    <div className={`flex flex-col items-start gap-2 min-w-0 ${className}`}>
+      <DetectraLogoMark size={size} imgClassName={imgClassName} glow={glow} />
+      {tagline && (
+        <p className="text-gray-500 text-xs sm:text-sm font-medium max-w-xs leading-snug">
+          {tagline}
+        </p>
+      )}
+    </div>
+  );
 }

@@ -23,6 +23,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
+import { POST_AUTH_PATH } from '../constants/routes';
 import { supabase, isSupabaseConfigured, purgeSupabaseTokens } from '../lib/supabase';
 
 interface UserProfile {
@@ -193,15 +194,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (event === 'SIGNED_IN' && sess?.user) {
           fetchOrCreateProfile(sess.user.id);
-          // OAuth-only redirect (email/password is handled by SignIn.tsx)
+          sessionStorage.setItem('oauth_redirect_path', POST_AUTH_PATH);
           const provider = sess.user.app_metadata?.provider;
           if (provider && provider !== 'email') {
-            const savedPath = sessionStorage.getItem('oauth_redirect_path');
             sessionStorage.removeItem('oauth_redirect_path');
             sessionStorage.removeItem('oauth_origin');
-            if (savedPath && savedPath !== window.location.pathname) {
+            if (window.location.pathname !== POST_AUTH_PATH) {
               setTimeout(() => {
-                window.location.href = `${window.location.origin}${savedPath}`;
+                window.location.href = `${window.location.origin}${POST_AUTH_PATH}`;
               }, 80);
             }
           }
@@ -314,14 +314,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (provider) => {
       if (!isSupabaseConfigured) return { error: GUEST_ERROR };
       try {
-        const savedPath = sessionStorage.getItem('oauth_redirect_path');
-        const candidatePath =
-          savedPath ||
-          (['/signin', '/signup'].includes(window.location.pathname)
-            ? '/analyze'
-            : window.location.pathname);
-        const redirectUrl = `${window.location.origin}${candidatePath}`;
-        if (!savedPath) sessionStorage.setItem('oauth_redirect_path', candidatePath);
+        sessionStorage.setItem('oauth_redirect_path', POST_AUTH_PATH);
+        const redirectUrl = `${window.location.origin}${POST_AUTH_PATH}`;
         sessionStorage.setItem('oauth_origin', window.location.origin);
 
         const { error } = await supabase.auth.signInWithOAuth({

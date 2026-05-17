@@ -3,6 +3,7 @@ import { Mail, Github, Linkedin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import DetectraLogo from './DetectraLogo';
+import { openAuthModal } from '../lib/openAuth';
 
 export default function Footer() {
   const { user } = useAuth();
@@ -17,13 +18,7 @@ export default function Footer() {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 items-start">
           <div className="md:col-span-2">
-            <DetectraLogo
-              variant="wordmark"
-              showText={false}
-              size="md"
-              linkToHome
-              className="mb-4 hover:opacity-90 transition-opacity"
-            />
+            <DetectraLogo size="lg" linkToHome className="mb-4 group-hover:opacity-90 transition-opacity" />
             <p className="text-sm text-gray-500 max-w-xl leading-relaxed">
               Professional multimodal video intelligence for security teams: faster investigations, evidence-backed results, and risk-prioritized reporting.
             </p>
@@ -32,9 +27,19 @@ export default function Footer() {
           <div>
             <h4 className="text-white text-sm font-semibold mb-3">Product</h4>
             <nav className="space-y-2 text-sm" aria-label="Product links">
-              <Link to={user ? '/analyze' : '/signin'} className="block hover:text-white transition-colors">
-                {user ? 'Video Analyzer' : 'Sign in to analyze'}
-              </Link>
+              {user ? (
+                <Link to="/analyze" className="block hover:text-white transition-colors">
+                  Video Analyzer
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openAuthModal('signin')}
+                  className="block text-left hover:text-white transition-colors w-full"
+                >
+                  Sign in to analyze
+                </button>
+              )}
               <Link to="/demo" className="block hover:text-white transition-colors">Live Demo</Link>
               <Link to="/capabilities" className="block hover:text-white transition-colors">Capabilities</Link>
               <Link to="/pricing" className="block hover:text-white transition-colors">Pricing</Link>

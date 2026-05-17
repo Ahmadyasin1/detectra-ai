@@ -12,14 +12,14 @@ import Pricing from './pages/Pricing';
 import Team from './pages/Team';
 import BusinessCase from './pages/BusinessCase';
 import Contact from './pages/Contact';
-import SignIn from './pages/SignIn';
-import SignUp from './pages/SignUp';
+import AuthRouteHandler from './pages/AuthRouteHandler';
 import Profile from './pages/Profile';
 import Dashboard from './pages/Dashboard';
 import AnalyzeJob from './pages/AnalyzeJob';
 import JobResults from './pages/JobResults';
 import NotFound from './pages/NotFound';
 import { useAuth } from './contexts/AuthContext';
+import BrandAuthLoader from './components/BrandAuthLoader';
 
 /**
  * Generic protected route — redirects to /signin when no user.
@@ -38,12 +38,7 @@ function ProtectedRoute({
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <div className="text-center">
-          <div className="w-14 h-14 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-500 text-sm">Loading…</p>
-        </div>
-      </div>
+      <BrandAuthLoader />
     );
   }
 
@@ -84,8 +79,8 @@ function App() {
           <Route path="team" element={<Team />} />
           <Route path="business-case" element={<BusinessCase />} />
           <Route path="contact" element={<Contact />} />
-          <Route path="signin" element={<SignIn />} />
-          <Route path="signup" element={<SignUp />} />
+          <Route path="signin" element={<AuthRouteHandler mode="signin" />} />
+          <Route path="signup" element={<AuthRouteHandler mode="signup" />} />
           <Route
             path="profile"
             element={

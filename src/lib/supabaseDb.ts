@@ -3,6 +3,25 @@ import type { AnalysisResult } from './detectraApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type VideoUploadArtifacts = {
+  report_url?: string;
+  labeled_video_api_url?: string;
+  labeled_video_storage_path?: string;
+  labeled_video_public_url?: string;
+  rag_url?: string;
+  api_base?: string;
+  source_storage_path?: string;
+  source_public_url?: string;
+  saved_at?: string;
+  processing_time_s?: number;
+  duration_s?: number;
+  risk_level?: string;
+  risk_score?: number;
+  video_name?: string;
+  has_report?: boolean;
+  has_video?: boolean;
+};
+
 export interface VideoUpload {
   id: string;
   user_id: string;
@@ -11,6 +30,7 @@ export interface VideoUpload {
   description: string | null;
   status: 'processing' | 'completed' | 'failed';
   analysis_results: AnalysisResult | null;
+  artifacts?: VideoUploadArtifacts | null;
   created_at: string;
   updated_at: string;
 }
@@ -71,14 +91,25 @@ export async function createVideoUpload(
   userId: string,
   jobId: string,
   title: string,
+  extras?: { artifacts?: VideoUploadArtifacts; sourceStoragePath?: string; sourcePublicUrl?: string },
 ): Promise<VideoUpload | null> {
   if (!isSupabaseConfigured) return null;
 
-  const { token } = await maybeSession();
+  const { token, userId: sessionUid } = await maybeSession();
   if (!token) {
     console.warn('[supabaseDb] createVideoUpload skipped — no session');
     return null;
   }
+  if (sessionUid && sessionUid !== userId) {
+    console.warn('[supabaseDb] createVideoUpload refused — session user mismatch');
+    return null;
+  }
+
+  const artifacts: VideoUploadArtifacts = {
+    ...(extras?.artifacts ?? {}),
+    ...(extras?.sourceStoragePath ? { source_storage_path: extras.sourceStoragePath } : {}),
+    ...(extras?.sourcePublicUrl ? { source_public_url: extras.sourcePublicUrl } : {}),
+  };
 
   const { data, error } = await supabase
     .from('video_uploads')
@@ -89,11 +120,27 @@ export async function createVideoUpload(
       description: null,
       status: 'processing',
       analysis_results: null,
+      artifacts,
     })
     .select()
     .single();
 
   if (error) {
+    if (String(error.message).includes('artifacts')) {
+      const { data: retry, error: err2 } = await supabase
+        .from('video_uploads')
+        .insert({
+          user_id: userId,
+          video_url: jobIdToVideoUrl(jobId),
+          title: title || 'Untitled Analysis',
+          description: null,
+          status: 'processing',
+          analysis_results: null,
+        })
+        .select()
+        .single();
+      if (!err2) return retry as VideoUpload;
+    }
     logSupabaseError('createVideoUpload', error);
     return null;
   }
@@ -103,21 +150,49 @@ export async function createVideoUpload(
 export async function updateVideoUpload(
   userId: string,
   jobId: string,
-  update: Partial<Pick<VideoUpload, 'status' | 'analysis_results' | 'title' | 'description'>>,
+  update: Partial<
+    Pick<VideoUpload, 'status' | 'analysis_results' | 'title' | 'description' | 'artifacts'>
+  >,
 ): Promise<void> {
   if (!isSupabaseConfigured) return;
 
-  const { error } = await supabase
+  const { token, userId: sessionUid } = await maybeSession();
+  if (!token) return;
+  if (sessionUid && sessionUid !== userId) {
+    console.warn('[supabaseDb] updateVideoUpload refused — session user mismatch');
+    return;
+  }
+
+  const row: Record<string, unknown> = { ...update, updated_at: new Date().toISOString() };
+  if (update.artifacts) {
+    const cur = await getVideoUploadByJobId(userId, jobId);
+    row.artifacts = { ...(cur?.artifacts ?? {}), ...update.artifacts };
+  }
+
+  let { error } = await supabase
     .from('video_uploads')
-    .update({ ...update, updated_at: new Date().toISOString() })
+    .update(row)
     .eq('user_id', userId)
     .eq('video_url', jobIdToVideoUrl(jobId));
+
+  if (error && String(error.message).includes('artifacts') && update.artifacts) {
+    const rest = { ...row };
+    delete rest.artifacts;
+    ({ error } = await supabase
+      .from('video_uploads')
+      .update(rest)
+      .eq('user_id', userId)
+      .eq('video_url', jobIdToVideoUrl(jobId)));
+  }
 
   if (error) logSupabaseError('updateVideoUpload', error);
 }
 
 export async function getUserVideoUploads(userId: string): Promise<VideoUpload[]> {
   if (!isSupabaseConfigured) return [];
+
+  const { userId: sessionUid } = await maybeSession();
+  if (sessionUid && sessionUid !== userId) return [];
 
   const { data, error } = await supabase
     .from('video_uploads')
@@ -137,6 +212,9 @@ export async function getVideoUploadByJobId(
   jobId: string,
 ): Promise<VideoUpload | null> {
   if (!isSupabaseConfigured) return null;
+
+  const { userId: sessionUid } = await maybeSession();
+  if (sessionUid && sessionUid !== userId) return null;
 
   const { data, error } = await supabase
     .from('video_uploads')

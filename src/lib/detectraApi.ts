@@ -157,6 +157,19 @@ export interface ApiHealth {
   models_loaded: boolean;
   active_jobs: number;
   total_jobs: number;
+  supabase_configured?: boolean;
+  on_heroku?: boolean;
+  opencv?: string;
+  models?: Record<string, unknown>;
+}
+
+export interface ApiStats {
+  total: number;
+  completed: number;
+  active: number;
+  failed: number;
+  critical_alerts: number;
+  uptime_s: number;
 }
 
 export interface TranscriptTranslationResponse {
@@ -172,9 +185,30 @@ export interface JobAskResponse {
 
 // --- HTTP client --------------------------------------------------------------
 
-// Empty string = same-origin (Vite dev proxy / nginx). Set VITE_API_URL for split deployments.
-export const API_URL: string =
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+/** Production analysis API (Heroku). */
+export const HEROKU_API_DEFAULT = 'https://detectra-ai-e00ebf89f84f.herokuapp.com';
+
+const CONFIGURED_API = (
+  (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/$/, '') || ''
+);
+
+/**
+ * HTTP base URL for REST calls.
+ * - Dev: '' → Vite proxies /api and /health to VITE_API_URL (see vite.config.ts).
+ * - Prod on Vercel: '' when VITE_API_SAME_ORIGIN=true → vercel.json rewrites (no CORS).
+ * - Direct: full Heroku URL when VITE_API_DIRECT=true (requires ALLOWED_ORIGINS on API).
+ */
+export const API_URL: string = (() => {
+  if (import.meta.env.VITE_API_DIRECT === 'true') {
+    return CONFIGURED_API || HEROKU_API_DEFAULT;
+  }
+  if (import.meta.env.DEV) return '';
+  if (import.meta.env.VITE_API_SAME_ORIGIN === 'true') return '';
+  return CONFIGURED_API || HEROKU_API_DEFAULT;
+})();
+
+/** WebSocket base — always the real API host (Vercel cannot proxy WS to Heroku). */
+export const WS_API_URL: string = CONFIGURED_API || HEROKU_API_DEFAULT;
 
 /** Build an absolute API URL, useful for non-JSON requests (downloads, live stream, etc.). */
 export function apiUrl(path: string): string {
@@ -331,10 +365,62 @@ function fetchWithRetry<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 // --- API calls ---------------------------------------------------------------
 
+async function fetchHealthOnce(url: string): Promise<ApiHealth> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 20_000);
+  try {
+    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as ApiHealth;
+    if (data.status !== 'online') throw new Error('API not online');
+    return data;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+/** Health check with retries; in dev, falls back to direct Heroku URL if Vite proxy fails. */
 export async function checkHealth(): Promise<ApiHealth> {
-  const res = await fetch(`${API_URL}/health`);
-  if (!res.ok) throw new Error('API offline');
-  return res.json();
+  const direct = (CONFIGURED_API || HEROKU_API_DEFAULT).replace(/\/$/, '');
+  const candidates = import.meta.env.DEV
+    ? [`${apiUrl('/health')}`, `${direct}/health`]
+    : [`${apiUrl('/health')}`];
+  const unique = [...new Set(candidates)];
+
+  let lastError: unknown;
+  for (const url of unique) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await fetchHealthOnce(url);
+      } catch (err) {
+        lastError = err;
+        if (attempt < 2) {
+          await new Promise((r) => window.setTimeout(r, 600 * (attempt + 1)));
+        }
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('API offline');
+}
+
+export async function getApiStats(): Promise<ApiStats | null> {
+  try {
+    return await fetchWithRetry<ApiStats>('/api/stats');
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch API path with Supabase JWT (required for protected job artifacts). */
+export async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = await authHeader();
+  return fetch(apiUrl(path), {
+    ...init,
+    headers: {
+      ...(init.headers as Record<string, string> | undefined),
+      ...headers,
+    },
+  });
 }
 
 export async function submitVideo(
@@ -349,7 +435,7 @@ export async function submitVideo(
   const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000);
   
   try {
-    const res = await fetch(`${API_URL}/api/analyze`, {
+    const res = await fetch(apiUrl('/api/analyze'), {
       method: 'POST',
       body: form,
       headers: headers as any,
@@ -411,12 +497,23 @@ export function getJobResult(jobId: string): Promise<AnalysisResult> {
   return fetchWithRetry<AnalysisResult>(`/api/jobs/${jobId}/result`);
 }
 
-export async function listMyJobs(): Promise<JobStatus[]> {
+export async function listMyJobs(userId?: string | null): Promise<JobStatus[]> {
+  const headers = await authHeader();
+  const authed = Boolean(headers.Authorization);
+
+  if (!authed) {
+    return [];
+  }
+
   try {
-    return await fetchWithRetry<JobStatus[]>('/api/my-jobs');
+    const jobs = await fetchWithRetry<JobStatus[]>('/api/my-jobs');
+    if (userId) {
+      return jobs.filter((j) => j.user_id === userId);
+    }
+    return jobs;
   } catch (err) {
-    console.warn('[detectraApi] /api/my-jobs failed, falling back to /api/jobs:', err);
-    return await fetchWithRetry<JobStatus[]>('/api/jobs');
+    console.warn('[detectraApi] /api/my-jobs failed:', err);
+    return [];
   }
 }
 
@@ -424,26 +521,23 @@ export function deleteJob(jobId: string): Promise<void> {
   return fetchWithRetry(`/api/jobs/${jobId}`, { method: 'DELETE' });
 }
 
-export function getWsUrl(jobId: string): string {
-  // If a custom API host is configured (e.g. split frontend/backend deployment),
-  // build the ws:// URL from it. Otherwise default to same-origin (works with
-  // both Vite dev proxy and nginx reverse proxy).
-  if (API_URL && /^https?:\/\//i.test(API_URL)) {
-    const wsBase = API_URL.replace(/^http/i, 'ws');
-    return `${wsBase}/ws/${jobId}`;
+function wsBaseFromHttp(httpBase: string): string {
+  if (httpBase && /^https?:\/\//i.test(httpBase)) {
+    return httpBase.replace(/^http/i, 'ws');
   }
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${wsProtocol}//${window.location.host}/ws/${jobId}`;
+  return `${wsProtocol}//${window.location.host}`;
+}
+
+export function getWsUrl(jobId: string): string {
+  const base = wsBaseFromHttp(WS_API_URL);
+  return `${base}/ws/${jobId}`;
 }
 
 /** Live-stream WebSocket URL (same routing rules as getWsUrl). */
 export function getLiveWsUrl(): string {
-  if (API_URL && /^https?:\/\//i.test(API_URL)) {
-    const wsBase = API_URL.replace(/^http/i, 'ws');
-    return `${wsBase}/ws/live`;
-  }
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${wsProtocol}//${window.location.host}/ws/live`;
+  const base = wsBaseFromHttp(WS_API_URL);
+  return `${base}/ws/live`;
 }
 
 export function getRagJsonUrl(jobId: string): string {

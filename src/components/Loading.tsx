@@ -12,7 +12,7 @@ export default function Loading() {
           transition={{ duration: 0.5 }}
           className="relative mx-auto mb-6"
         >
-          <DetectraLogoMark size="xl" className="mx-auto" />
+          <DetectraLogoMark size="xl" glow className="mx-auto justify-center" />
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}

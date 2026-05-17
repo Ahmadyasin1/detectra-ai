@@ -31,6 +31,32 @@
   code, pre, .font-mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
 }
 
+/* Skip link (visible on keyboard focus only) */
+.skip-to-content {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: 100;
+  padding: 0.75rem 1rem;
+  background: #0f172a;
+  color: #22d3ee;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+.skip-to-content:focus {
+  left: 1rem;
+  top: 1rem;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  outline: 2px solid #22d3ee;
+  outline-offset: 2px;
+}
+
 /* ── Scrollbar ─────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #0f172a; }
@@ -188,6 +214,12 @@
   .scroll-x-touch {
     @apply overflow-x-auto overscroll-x-contain;
     -webkit-overflow-scrolling: touch;
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
 
   /* Minimum tap target on coarse pointers */

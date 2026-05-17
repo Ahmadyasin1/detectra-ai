@@ -31,7 +31,7 @@ export default function AppLoader() {
               transition={{ duration: 0.5 }}
               className="relative mx-auto mb-8"
             >
-              <DetectraLogoMark variant="wordmark" size="2xl" className="mx-auto" />
+              <DetectraLogoMark size="2xl" glow className="mx-auto justify-center" />
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}

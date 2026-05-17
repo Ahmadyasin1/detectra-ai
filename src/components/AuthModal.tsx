@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, LogIn, AlertCircle, Eye, EyeOff, Github, User, UserPlus, CheckCircle, Check, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { DetectraLogoMark } from './DetectraLogo';
+import { useNavigate } from 'react-router-dom';
+import { POST_AUTH_PATH } from '../constants/routes';
+import AuthBrandHeader from './AuthBrandHeader';
 
 export default function AuthModal() {
   const [isOpen, setIsOpen] = useState(false);
@@ -24,7 +25,11 @@ export default function AuthModal() {
   
   const { signIn, signUp, signInWithProvider, user } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
+
+  const goToAnalyzer = useCallback(() => {
+    navigate(POST_AUTH_PATH, { replace: true });
+    window.scrollTo(0, 0);
+  }, [navigate]);
 
   // Listen to custom events to open the modal programmatically
   useEffect(() => {
@@ -53,8 +58,23 @@ export default function AuthModal() {
   useEffect(() => {
     if (user && isOpen) {
       close();
+      goToAnalyzer();
     }
-  }, [user, isOpen]);
+  }, [user, isOpen, goToAnalyzer]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,8 +123,7 @@ export default function AuthModal() {
           setLoading(false);
         } else {
           close();
-          const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/analyze';
-          navigate(from, { replace: true });
+          goToAnalyzer();
         }
       } catch {
         setError('An unexpected error occurred.');
@@ -152,8 +171,8 @@ export default function AuthModal() {
               </button>
 
               <div className="text-center mb-6 relative z-10">
-                <DetectraLogoMark variant="wordmark" size="md" className="mx-auto mb-4" />
-                <h2 className="text-2xl font-bold tracking-tight text-white mb-1">
+                <AuthBrandHeader size="auth" className="mb-3" />
+                <h2 className="text-xl font-bold tracking-tight text-white mb-1">
                   {mode === 'signin' ? 'Welcome Back' : 'Create Account'}
                 </h2>
                 <p className="text-gray-400 text-xs">
