@@ -4,6 +4,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { AuthProvider } from './contexts/AuthContext';
+import { NotificationStoreProvider } from './contexts/NotificationStore';
 import { ToastProvider } from './contexts/ToastContext';
 import { ensureLatestDeploy } from './lib/deployVersion';
 import './index.css';
@@ -20,9 +21,11 @@ function renderApp() {
       <HelmetProvider>
         <ErrorBoundary>
           <AuthProvider>
-            <ToastProvider>
-              <App />
-            </ToastProvider>
+            <NotificationStoreProvider>
+              <ToastProvider>
+                <App />
+              </ToastProvider>
+            </NotificationStoreProvider>
           </AuthProvider>
         </ErrorBoundary>
       </HelmetProvider>

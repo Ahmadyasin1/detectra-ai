@@ -207,9 +207,13 @@ export interface JobAskResponse {
 
 // --- HTTP client --------------------------------------------------------------
 
-/** Production analysis API (Heroku). */
-export const HEROKU_API_DEFAULT = 'https://detectra-ai-e00ebf89f84f.herokuapp.com';
-
+/**
+ * Explicit backend URL, set via VITE_API_URL at build time.
+ * In production on Vercel, leave VITE_API_URL empty — vercel.json rewrites
+ * proxy /api/* and /health to the DigitalOcean backend transparently.
+ * Set VITE_API_URL to a full URL only when deploying without Vercel rewrites
+ * (e.g. a custom domain with HTTPS on the DO droplet).
+ */
 const CONFIGURED_API = (
   (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/$/, '') || ''
 );
@@ -217,20 +221,24 @@ const CONFIGURED_API = (
 /**
  * HTTP base URL for REST calls.
  * - Dev: '' → Vite proxies /api and /health to VITE_API_URL (see vite.config.ts).
- * - Prod on Vercel: '' when VITE_API_SAME_ORIGIN=true → vercel.json rewrites (no CORS).
- * - Direct: full Heroku URL when VITE_API_DIRECT=true (requires ALLOWED_ORIGINS on API).
+ * - Prod on Vercel: '' → vercel.json rewrites proxy to DO backend (no CORS, no mixed content).
+ * - Direct (VITE_API_DIRECT=true): uses VITE_API_URL (requires HTTPS on DO + ALLOWED_ORIGINS).
  */
 export const API_URL: string = (() => {
-  if (import.meta.env.VITE_API_DIRECT === 'true') {
-    return CONFIGURED_API || HEROKU_API_DEFAULT;
-  }
+  if (import.meta.env.VITE_API_DIRECT === 'true') return CONFIGURED_API;
   if (import.meta.env.DEV) return '';
-  if (import.meta.env.VITE_API_SAME_ORIGIN === 'true') return '';
-  return CONFIGURED_API || HEROKU_API_DEFAULT;
+  return CONFIGURED_API;  // empty = relative paths → Vercel rewrites handle routing
 })();
 
-/** WebSocket base — always the real API host (Vercel cannot proxy WS to Heroku). */
-export const WS_API_URL: string = CONFIGURED_API || HEROKU_API_DEFAULT;
+/**
+ * WebSocket base URL.
+ * Vercel cannot proxy WebSockets, so WS uses VITE_API_URL directly when set.
+ * If empty, wsBaseFromHttp() falls back to window.location.host — WS will fail
+ * gracefully on Vercel (wss://detectra-ai.vercel.app/ws/* is not proxied) and
+ * the progress page falls back to HTTP polling automatically.
+ * For real-time WS support, set VITE_API_URL to an HTTPS-enabled backend URL.
+ */
+export const WS_API_URL: string = CONFIGURED_API;
 
 /** Build an absolute API URL, useful for non-JSON requests (downloads, live stream, etc.). */
 export function apiUrl(path: string): string {
@@ -403,10 +411,10 @@ async function fetchHealthOnce(url: string): Promise<ApiHealth> {
   }
 }
 
-/** Health check with retries; in dev, falls back to direct Heroku URL if Vite proxy fails. */
+/** Health check with retries; in dev, also tries VITE_API_URL directly if proxy fails. */
 export async function checkHealth(): Promise<ApiHealth> {
-  const direct = (CONFIGURED_API || HEROKU_API_DEFAULT).replace(/\/$/, '');
-  const candidates = import.meta.env.DEV
+  const direct = CONFIGURED_API.replace(/\/$/, '');
+  const candidates = import.meta.env.DEV && direct
     ? [`${apiUrl('/health')}`, `${direct}/health`]
     : [`${apiUrl('/health')}`];
   const unique = [...new Set(candidates)];

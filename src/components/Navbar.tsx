@@ -16,6 +16,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { BrandNavLogo } from './BrandNavLogo';
 import { openAuthModal } from '../lib/openAuth';
+import { NotificationCenter } from './NotificationCenter';
 
 const MAIN_LINKS = [
   { label: 'Home',         href: '/' },
@@ -175,6 +176,7 @@ export default function Navbar() {
 
           {/* Desktop auth */}
           <div className="hidden lg:flex items-center gap-2 shrink-0">
+            <NotificationCenter />
             {user ? (
               <motion.div className="relative" data-nav-user>
                 <button
@@ -250,16 +252,19 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Mobile menu button */}
-          <button
-            type="button"
-            className="lg:hidden flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 hover:bg-white/5 hover:text-white"
-            onClick={() => setMobileOpen((v) => !v)}
-            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
-            aria-expanded={mobileOpen}
-          >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+          {/* Mobile: notification bell + menu button */}
+          <div className="lg:hidden flex items-center gap-1">
+            <NotificationCenter />
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 hover:bg-white/5 hover:text-white"
+              onClick={() => setMobileOpen((v) => !v)}
+              aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileOpen}
+            >
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </motion.div>
       </nav>
 
