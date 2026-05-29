@@ -67,9 +67,9 @@ export class ErrorBoundary extends Component<Props, State> {
       };
       
       // Store in localStorage for recovery
-      const errors = JSON.parse(localStorage.getItem('detecra-errors') || '[]');
+      const errors = JSON.parse(localStorage.getItem('detectra-errors') || '[]');
       errors.push(errorData);
-      localStorage.setItem('detecra-errors', JSON.stringify(errors.slice(-10))); // Keep last 10
+      localStorage.setItem('detectra-errors', JSON.stringify(errors.slice(-10))); // Keep last 10
       
       // Don't send in production to avoid exposing details
       if (import.meta.env.DEV) {
@@ -93,7 +93,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
       // Default graceful degradation UI
       return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-gray-950">
+        <div role="alert" aria-live="assertive" className="min-h-screen flex items-center justify-center p-4 bg-gray-950">
           <div className="max-w-md w-full card-glass rounded-2xl p-8 text-center border border-white/10">
             <div className="w-16 h-16 mx-auto rounded-2xl bg-red-500/10 flex items-center justify-center mb-4">
               <AlertTriangle className="w-8 h-8 text-red-400" />

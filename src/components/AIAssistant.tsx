@@ -115,8 +115,9 @@ export default function AIAssistant({ result, jobId }: { result: AnalysisResult;
       setMessages(prev => [...prev, { role: 'assistant', content: reply.trim() }]);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to get AI response';
-      setError(msg);
-      setMessages(prev => prev.slice(0, -1));
+      // Keep the user message in history; append an error assistant turn so the
+      // user can see what failed without losing their question and having to retype.
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠ ${msg}` }]);
     } finally {
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 100);

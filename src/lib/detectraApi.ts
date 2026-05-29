@@ -1,8 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable no-empty */
 
 // --- Enums / Literals ---------------------------------------------------------
 
@@ -86,7 +84,6 @@ export interface SeverityCounts {
 
 export interface AnalysisResult {
   // Video metadata
-  video_path:             string;
   video_name:             string;   // computed by backend: video_path stem
   duration_s:             number;
   width:                  number;
@@ -113,6 +110,12 @@ export interface AnalysisResult {
   summary:                string;
   processing_time_s:      number;
 
+  // v7.1 fields (crowd intelligence & identity)
+  crowd_density_score?:   number;     // 0–1 crowding score for the video
+  model_recommendation?:  string;     // suggested upgrade model for this scene type
+  face_count_peak?:       number;     // highest simultaneous face count in any frame
+  face_detections?:       FaceDetection[];
+
   // Computed by _serialize_analysis
   risk_level:         RiskLevel;
   risk_score:         number;         // 0-1 weighted severity score
@@ -121,6 +124,12 @@ export interface AnalysisResult {
   top_objects:        TopObject[];
   /** Present when the API serializes analysis with per-frame telemetry. */
   frame_analytics?:   FrameAnalyticsPoint[];
+}
+
+export interface FaceDetection {
+  timestamp_s:  number;
+  face_count:   number;
+  embeddings?:  number[][];   // optional face embeddings (rarely sent)
 }
 
 // --- Job status ---------------------------------------------------------------
@@ -143,24 +152,37 @@ export interface JobStatus {
 }
 
 export interface SubmitResponse {
-  job_id:     string;
-  status:     string;
-  video_name: string;
-  size_mb:    number;
-  ws_url:     string;
+  job_id:         string;
+  status:         string;
+  video_name:     string;
+  user_id:        string;
+  size_mb:        number;
+  queue_position: number;
+  ws_url:         string;
+  status_url:     string;
+  result_url?:    string;
 }
 
 export interface ApiHealth {
-  status: string;
-  version: string;
-  timestamp: string;
-  models_loaded: boolean;
-  active_jobs: number;
-  total_jobs: number;
+  status:              string;
+  version:             string;
+  timestamp:           string;
+  models_loaded:       boolean;
+  running_jobs:        number;
+  queued_jobs:         number;
+  total_jobs:          number;
+  max_concurrent:      number;
   supabase_configured?: boolean;
-  on_heroku?: boolean;
-  opencv?: string;
-  models?: Record<string, unknown>;
+  on_heroku?:          boolean;
+  multiagent_enabled?: boolean;
+  opencv?:             string;
+  uptime_s?:           number;
+  models?: {
+    yolo_seg?:       string;
+    yolo_pose?:      string;
+    whisper?:        string;
+    faster_whisper?: boolean;
+  };
 }
 
 export interface ApiStats {
@@ -316,6 +338,8 @@ async function apiFetchWithRetry<T>(
             return retryRes.json() as Promise<T>;
           }
         }
+        // Token refresh failed — sign out so ProtectedRoute redirects to /signin
+        await supabase.auth.signOut().catch(() => {});
         const body = await res.json().catch(() => ({ detail: res.statusText }));
         throw new Error(body.detail || `HTTP ${res.status}: ${res.statusText}`);
       }
@@ -423,38 +447,71 @@ export async function fetchWithAuth(path: string, init: RequestInit = {}): Promi
   });
 }
 
+/** Returns true when the string is a safe job ID (alphanumeric + hyphen/underscore, 4-64 chars). */
+export function isValidJobId(id: string | undefined): id is string {
+  return typeof id === 'string' && /^[a-zA-Z0-9_-]{4,64}$/.test(id.trim());
+}
+
+/** Human-readable error for a failed API call, distinguished by HTTP status. */
+export function getJobErrorMessage(err: unknown, jobId?: string): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes('404') || msg.toLowerCase().includes('not found'))
+    return 'This analysis was not found. It may have expired — please start a new analysis.';
+  if (msg.includes('403') || msg.toLowerCase().includes('access denied') || msg.toLowerCase().includes('forbidden'))
+    return 'Access denied. Sign in to view this analysis.';
+  if (msg.includes('429'))
+    return 'Too many requests — please wait a moment and try again.';
+  if (msg.includes('503') || msg.includes('502'))
+    return 'Server is temporarily unavailable. Please try again in a few minutes.';
+  if (msg.includes('413') || msg.toLowerCase().includes('too large') || msg.toLowerCase().includes('entity too large'))
+    return 'File is too large. Maximum upload size is 500 MB — please choose a smaller video.';
+  if (msg.includes('400') || msg.toLowerCase().includes('bad request'))
+    return 'Invalid request. Check that your file is a supported video format (MP4, AVI, MOV, MKV, WebM).';
+  if (msg.toLowerCase().includes('timeout') || msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('network'))
+    return 'Connection timeout. Check your internet connection and try again.';
+  const suffix = jobId ? ` (job: ${jobId.slice(0, 8)})` : '';
+  return `${msg}${suffix}`;
+}
+
 export async function submitVideo(
   file: File,
   _onProgress?: (pct: number) => void,
+  externalSignal?: AbortSignal,
 ): Promise<SubmitResponse> {
   const headers = await authHeader();
   const form = new FormData();
   form.append('file', file);
-  
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000);
-  
+  // If caller provides a signal (e.g. user cancels upload), abort our controller too
+  externalSignal?.addEventListener('abort', () => controller.abort(), { once: true });
+
   try {
     const res = await fetch(apiUrl('/api/analyze'), {
       method: 'POST',
       body: form,
-      headers: headers as any,
+      headers: headers as Record<string, string>,
       signal: controller.signal,
     });
-    
+
     if (!res.ok) {
       let detail = `HTTP ${res.status}: ${res.statusText}`;
       try {
-        const body = await res.json();
+        const body = await res.json() as { detail?: string };
         if (body.detail) detail = body.detail;
-      } catch {}
+      } catch { /* ignore parse error */ }
       throw new Error(detail);
     }
-    
-    return await res.json() as SubmitResponse;
+
+    const data = await res.json() as SubmitResponse;
+    if (!isValidJobId(data?.job_id)) {
+      throw new Error('Server returned an invalid job ID. Please try again.');
+    }
+    return data;
   } catch (err: unknown) {
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error('Upload timed out - file may be too large');
+      throw new Error(externalSignal?.aborted ? 'Upload cancelled by user' : 'Upload timed out - file may be too large');
     }
     throw err;
   } finally {
@@ -506,7 +563,9 @@ export async function listMyJobs(userId?: string | null): Promise<JobStatus[]> {
   }
 
   try {
-    const jobs = await fetchWithRetry<JobStatus[]>('/api/my-jobs');
+    const res = await fetchWithRetry<{ jobs?: JobStatus[] } | JobStatus[]>('/api/my-jobs?limit=200');
+    // Handle both the legacy array format and the new paginated {jobs:[]} format
+    const jobs: JobStatus[] = Array.isArray(res) ? res : (res as { jobs?: JobStatus[] }).jobs ?? [];
     if (userId) {
       return jobs.filter((j) => j.user_id === userId);
     }
@@ -521,6 +580,14 @@ export function deleteJob(jobId: string): Promise<void> {
   return fetchWithRetry(`/api/jobs/${jobId}`, { method: 'DELETE' });
 }
 
+export function cancelJob(jobId: string): Promise<{ cancelled: string }> {
+  return fetchWithRetry(`/api/jobs/${jobId}/cancel`, { method: 'POST' });
+}
+
+export function retryJob(jobId: string): Promise<SubmitResponse & { message?: string }> {
+  return fetchWithRetry(`/api/jobs/${jobId}/retry`, { method: 'POST' });
+}
+
 function wsBaseFromHttp(httpBase: string): string {
   if (httpBase && /^https?:\/\//i.test(httpBase)) {
     return httpBase.replace(/^http/i, 'ws');
@@ -529,14 +596,28 @@ function wsBaseFromHttp(httpBase: string): string {
   return `${wsProtocol}//${window.location.host}`;
 }
 
-export function getWsUrl(jobId: string): string {
+export async function getWsUrl(jobId: string): Promise<string> {
   const base = wsBaseFromHttp(WS_API_URL);
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (token) return `${base}/ws/${jobId}?token=${encodeURIComponent(token)}`;
+    } catch { /* fall through to unauthenticated URL */ }
+  }
   return `${base}/ws/${jobId}`;
 }
 
 /** Live-stream WebSocket URL (same routing rules as getWsUrl). */
-export function getLiveWsUrl(): string {
+export async function getLiveWsUrl(): Promise<string> {
   const base = wsBaseFromHttp(WS_API_URL);
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (token) return `${base}/ws/live?token=${encodeURIComponent(token)}`;
+    } catch { /* fall through */ }
+  }
   return `${base}/ws/live`;
 }
 
@@ -546,6 +627,10 @@ export function getRagJsonUrl(jobId: string): string {
 
 export function getReportUrl(jobId: string): string {
   return apiUrl(`/api/jobs/${jobId}/report`);
+}
+
+export function getPdfReportUrl(jobId: string): string {
+  return apiUrl(`/api/jobs/${jobId}/report/pdf`);
 }
 
 export function getVideoUrl(jobId: string): string {

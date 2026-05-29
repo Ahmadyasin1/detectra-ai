@@ -1,5 +1,5 @@
 /* Deploy-scoped service worker — network-first for HTML; never cache the app shell long-term. */
-const BUILD_ID = 'local-mp9z61wh';
+const BUILD_ID = '__BUILD_ID__';
 const CACHE = `detectra-shell-${BUILD_ID}`;
 
 self.addEventListener('install', (event) => {

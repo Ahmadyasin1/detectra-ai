@@ -8,7 +8,7 @@ import { HeroBackground, HeroButtonPrimary, HeroButtonSecondary } from './PageHe
 
 const DEMO_CLIPS = getDemoClips();
 const HERO_VIDEOS = DEMO_CLIPS.map((c) => c.src);
-const SCENARIO_LABELS = DEMO_CLIPS.map((c) => `${c.title} â€” ${c.scenario.toLowerCase()}`);
+const SCENARIO_LABELS = DEMO_CLIPS.map((c) => `${c.title} — ${c.scenario.toLowerCase()}`);
 
 
 const TRUST_CHIPS = [
@@ -232,9 +232,9 @@ export default function Hero() {
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-gray-400 text-center sm:text-left">
               <span className="font-medium text-gray-300">{scenarioLabel}</span>
-              <span className="hidden sm:inline"> Â· </span>
+              <span className="hidden sm:inline"> · </span>
               <span className="block sm:inline mt-0.5 sm:mt-0 text-xs sm:text-sm">
-                Pre-labeled samples â€” upload your own in the analyzer.
+                Pre-labeled samples — upload your own in the analyzer.
               </span>
             </p>
 

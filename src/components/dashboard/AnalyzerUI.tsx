@@ -9,6 +9,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { HeroBackground, HeroButtonPrimary, HeroButtonSecondary } from '../PageHero';
+import { JOB_FILTERS, type JobFilterId } from './jobFilters';
 
 /* ── Command hero ─────────────────────────────────────────────────────────── */
 
@@ -270,16 +271,6 @@ export function AnalyzerSection({
 }
 
 /* ── Filter pills ─────────────────────────────────────────────────────────── */
-
-export const JOB_FILTERS = [
-  { id: 'all' as const, label: 'All' },
-  { id: 'completed' as const, label: 'Done' },
-  { id: 'running' as const, label: 'Running' },
-  { id: 'pending' as const, label: 'Queued' },
-  { id: 'failed' as const, label: 'Failed' },
-] as const;
-
-export type JobFilterId = (typeof JOB_FILTERS)[number]['id'];
 
 export function JobFilterPills({
   value,

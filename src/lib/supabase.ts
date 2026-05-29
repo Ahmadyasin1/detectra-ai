@@ -55,7 +55,7 @@ if (isSupabaseConfigured) {
     console.warn(
       '[Detectra] Supabase is not configured — running in GUEST mode.\n' +
         'To enable account features (login, history, cloud profile):\n' +
-        '  1. Copy detectra-ai-main/.env.example to .env\n' +
+        '  1. Copy .env.example → .env  (in detectra-ai/)\n' +
         '  2. Fill in VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY\n' +
         '  3. Restart `npm run dev`.',
     );

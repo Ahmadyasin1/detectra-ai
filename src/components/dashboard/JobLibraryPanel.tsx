@@ -4,7 +4,8 @@ import { formatJobTimeLabel } from '../../lib/jobDisplay';
 import type { VideoUpload } from '../../lib/supabaseDb';
 import { jobStatusLabel } from '../../lib/userFacing';
 import EmptyState from '../ui/EmptyState';
-import { JobFilterPills, type JobFilterId } from './AnalyzerUI';
+import { JobFilterPills } from './AnalyzerUI';
+import type { JobFilterId } from './jobFilters';
 
 function statusTone(status: string) {
   if (status === 'completed') return 'analyzer-job-status--done';

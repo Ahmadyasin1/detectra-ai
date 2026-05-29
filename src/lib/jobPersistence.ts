@@ -12,10 +12,13 @@ import {
 import {
   createVideoUpload,
   getVideoUploadByJobId,
+  getUserVideoUploads,
   updateVideoUpload,
+  videoUrlToJobId,
   type VideoUploadArtifacts,
+  type VideoUpload,
 } from './supabaseDb';
-import { isSupabaseConfigured } from './supabase';
+import { isSupabaseConfigured, supabase } from './supabase';
 
 export type PersistJobOptions = {
   /** Download labeled MP4 from API and store in Supabase Storage (best-effort). */
@@ -41,6 +44,16 @@ export async function persistJobToUserLibrary(
     status = await getJobStatus(jobId);
   } catch (err) {
     console.warn('[persistJob] getJobStatus failed:', err);
+    // Stamp saved_at so syncUserJobLibrary won't retry this dead/expired job every 15s
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('404') || msg.toLowerCase().includes('not found')) {
+      const cur = await getVideoUploadByJobId(userId, jobId);
+      if (cur) {
+        await updateVideoUpload(userId, jobId, {
+          artifacts: { ...(cur.artifacts ?? {}), saved_at: new Date().toISOString() },
+        }).catch(() => {});
+      }
+    }
     return { status: null, result: null };
   }
 
@@ -84,7 +97,6 @@ export async function persistJobToUserLibrary(
         const blob = await res.blob();
         const file = new File([blob], `${jobId}-labeled.mp4`, { type: 'video/mp4' });
         const path = `labeled/${userId}/${jobId}.mp4`;
-        const { supabase } = await import('./supabase');
         const bucket =
           (import.meta.env.VITE_SUPABASE_STORAGE_BUCKET as string | undefined) || 'videos';
         const { error } = await supabase.storage.from(bucket).upload(path, file, {
@@ -130,6 +142,15 @@ export async function syncUserJobLibraryToDatabase(
     const missingMeta = !row?.artifacts?.saved_at;
     if (!missingResult && !missingMeta) continue;
 
+    // Result already in Supabase — just stamp saved_at locally, no API call needed.
+    // Without this, jobs whose backend sessions ended would 404-poll every 15s forever.
+    if (!missingResult && missingMeta) {
+      await updateVideoUpload(userId, job.job_id, {
+        artifacts: { saved_at: new Date().toISOString() },
+      }).catch(() => {});
+      continue;
+    }
+
     try {
       await persistJobToUserLibrary(userId, job.job_id, {
         archiveLabeledVideo: Boolean(job.has_video && !row?.artifacts?.labeled_video_public_url),
@@ -142,10 +163,9 @@ export async function syncUserJobLibraryToDatabase(
   }
 }
 
-async function getVideoUploadsMap(userId: string): Promise<Map<string, import('./supabaseDb').VideoUpload>> {
-  const { getUserVideoUploads, videoUrlToJobId } = await import('./supabaseDb');
+async function getVideoUploadsMap(userId: string): Promise<Map<string, VideoUpload>> {
   const uploads = await getUserVideoUploads(userId).catch(() => []);
-  const map = new Map<string, import('./supabaseDb').VideoUpload>();
+  const map = new Map<string, VideoUpload>();
   for (const u of uploads) {
     const id = videoUrlToJobId(u.video_url);
     if (id) map.set(id, u);

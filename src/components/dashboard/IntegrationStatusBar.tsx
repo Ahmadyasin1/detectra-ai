@@ -84,8 +84,10 @@ export default function IntegrationStatusBar({ snapshot }: { snapshot: Integrati
           !snapshot.healthKnown
             ? 'Waiting for health check'
             : api.serverSupabaseSync
-              ? 'Heroku API writes job history to Supabase'
-              : 'Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY on Heroku'
+              ? 'API syncs job history to Supabase in real-time'
+              : api.onHeroku
+                ? 'Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in Heroku config vars'
+                : 'Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in backend .env, then restart'
         }
       />
     </div>
