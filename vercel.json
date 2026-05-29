@@ -11,6 +11,10 @@
     {
       "source": "/outputs/:path*",
       "destination": "http://152.42.182.203/outputs/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

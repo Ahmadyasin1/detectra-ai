@@ -15,17 +15,16 @@ COPY package*.json ./
 RUN npm ci --prefer-offline --no-audit --no-fund
 
 # Build-time env vars (injected at build via --build-arg)
-# WARNING: Any VITE_* var set here is baked permanently into the JS bundle and
-# is visible to anyone who downloads the production assets.
-# DO NOT pass VITE_HF_TOKEN or other secret tokens here — use server-side API instead.
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_SUPABASE_STORAGE_BUCKET=videos
 ARG VITE_API_URL=
+ARG VITE_HF_TOKEN=
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_SUPABASE_STORAGE_BUCKET=$VITE_SUPABASE_STORAGE_BUCKET
 ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_HF_TOKEN=$VITE_HF_TOKEN
 
 # Copy source and build
 COPY . .

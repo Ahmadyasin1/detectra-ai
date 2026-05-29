@@ -21,11 +21,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const deployBuildId = readDeployBuildId();
 
-  // Backend API — defaults to local backend in dev; set VITE_API_URL for staging/production
-  const apiTarget = env.VITE_API_URL || 'http://localhost:8000';
-  if (!env.VITE_API_URL && mode !== 'production') {
-    console.info('[vite] VITE_API_URL not set — proxying to http://localhost:8000');
-  }
+  // Backend API — Heroku by default; override with VITE_API_URL for local API
+  const apiTarget =
+    env.VITE_API_URL || 'https://detectra-ai-e00ebf89f84f.herokuapp.com';
   const wsTarget  = apiTarget.replace(/^https?/, 'ws');
 
   return {
@@ -36,11 +34,6 @@ export default defineConfig(({ mode }) => {
 
     optimizeDeps: {
       exclude: ['lucide-react'],
-    },
-
-    esbuild: {
-      // Strip console statements and debugger calls from production bundle
-      drop: mode === 'production' ? ['console', 'debugger'] : [],
     },
 
     build: {
