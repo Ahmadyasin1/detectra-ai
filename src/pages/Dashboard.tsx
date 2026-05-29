@@ -1,5 +1,4 @@
-﻿/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable react-hooks/exhaustive-deps */
+﻿/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
@@ -38,8 +37,17 @@ import { buildIntegrationSnapshot } from '../lib/integration';
 import IntegrationStatusBar from '../components/dashboard/IntegrationStatusBar';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { addLocalJob, removeLocalJob, getLocalJobs } from '../lib/localJobSession';
+import { useToast } from '../contexts/ToastContext';
 import { syncUserJobLibraryToDatabase } from '../lib/jobPersistence';
 import { loadJobAnalysisResult, jobIsViewable } from '../lib/loadJobResult';
+
+interface AlertEntry {
+  id: string;
+  event_type: string;
+  timestamp: string;
+  description: string | undefined;
+  isCrit: boolean;
+}
 
 const DashboardStyles = () => (
   <style>{`
@@ -94,6 +102,7 @@ const fmtTime = (s: number) => {
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
   
   const [apiOnline, setApiOnline] = useState(false);
   const [backendStatus, setBackendStatus] = useState('Initializing...');
@@ -107,7 +116,7 @@ export default function Dashboard() {
   const [jobFilter, setJobFilter] = useState<'all' | 'completed' | 'running' | 'pending' | 'failed'>('all');
   
   // Job Data
-  const [jobData, setJobData] = useState<any>(null);
+  const [jobData, setJobData] = useState<AnalysisResult | null>(null);
   
   // Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -125,12 +134,14 @@ export default function Dashboard() {
   const [liveAction, setLiveAction] = useState('IDLE');
   
   // Ledger/Alerts
-  const [alertsFeed, setAlertsFeed] = useState<any[]>([]);
+  const [alertsFeed, setAlertsFeed] = useState<AlertEntry[]>([]);
 
   // Refs
-  const liveWsRef = useRef<WebSocket | null>(null);
-  const densityChartRef = useRef<any>(null);
-  const anomalyChartRef = useRef<any>(null);
+  const liveWsRef      = useRef<WebSocket | null>(null);
+  const densityChartRef= useRef<InstanceType<typeof Chart> | null>(null);
+  const anomalyChartRef= useRef<InstanceType<typeof Chart> | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
+  const mountedRef     = useRef(true);
 
   const checkServerHealth = async () => {
     try {
@@ -139,7 +150,8 @@ export default function Dashboard() {
       setHealth(res);
       setHealthKnown(true);
       if (res.models_loaded) {
-        setBackendStatus(res.active_jobs > 0 ? `ACTIVE JOBS: ${res.active_jobs}` : 'AI MODELS READY');
+        const activeCount = (res.running_jobs ?? 0) + (res.queued_jobs ?? 0);
+        setBackendStatus(activeCount > 0 ? `ACTIVE JOBS: ${activeCount}` : 'AI MODELS READY');
       } else {
         setBackendStatus('LOADING AI MODELS...');
       }
@@ -165,11 +177,11 @@ export default function Dashboard() {
           loadSecureUserJobHistory(user.id),
           getUserVideoUploads(user.id).catch(() => []),
         ]);
-        setJobs(merged);
-        setUserUploads(uploads);
+        if (mountedRef.current) setJobs(merged);
+        if (mountedRef.current) setUserUploads(uploads);
         void syncUserJobLibraryToDatabase(user.id, merged).then(async () => {
           const refreshed = await getUserVideoUploads(user.id).catch(() => []);
-          if (refreshed.length) setUserUploads(refreshed);
+          if (mountedRef.current && refreshed.length) setUserUploads(refreshed);
         });
         return;
       }
@@ -190,13 +202,47 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
+    const TERMINAL = new Set(['completed', 'failed', 'cancelled']);
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const tick = async () => {
+      await loadJobs();
+      // Stop polling once every job is in a terminal state (no more updates expected)
+      setJobs(prev => {
+        if (prev.length > 0 && prev.every(j => TERMINAL.has(j.status))) {
+          if (interval !== null) { clearInterval(interval); interval = null; }
+        }
+        return prev;
+      });
+    };
+
     loadJobs();
-    const interval = setInterval(loadJobs, 15000);
-    return () => clearInterval(interval);
+    interval = setInterval(tick, 15000);
+    return () => { if (interval !== null) clearInterval(interval); };
   }, [user?.id]);
+
+  // Destroy charts, abort uploads, and close live WS on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      densityChartRef.current?.destroy();
+      anomalyChartRef.current?.destroy();
+      if (liveWsRef.current) {
+        try { liveWsRef.current.close(); } catch { /* noop */ }
+        liveWsRef.current = null;
+      }
+      uploadAbortRef.current?.abort();
+      uploadAbortRef.current = null;
+    };
+  }, []);
 
   const pickFile = (file: File | undefined) => {
     if (!file) return;
+    if (file.size > 500 * 1024 * 1024) {
+      setUploadError('File too large — maximum 500 MB allowed.');
+      return;
+    }
     const err = validateVideoFile(file);
     if (err) {
       setUploadError(err);
@@ -222,6 +268,8 @@ export default function Dashboard() {
       setUploadError('Analysis server is offline. Wait for API ONLINE or try again in a moment.');
       return;
     }
+    const abortCtrl = new AbortController();
+    uploadAbortRef.current = abortCtrl;
     setIsUploading(true);
     setUploadError(null);
 
@@ -232,7 +280,7 @@ export default function Dashboard() {
       }
 
       // Only use the bucket-routed path when the upload actually succeeded.
-      // On any error we silently fall back to direct multipart upload â€” this
+      // On any error we silently fall back to direct multipart upload — this
       // avoids the "Bucket not found / object missing" cascade where the
       // backend later fails to download a path that was never created.
       const bucketOk = !!uploadResult && !uploadResult.error;
@@ -250,12 +298,12 @@ export default function Dashboard() {
           if (/bucket.*not.*found/i.test(uploadResult.error)) {
             setBucketWarning(
               `Storage bucket "${import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'videos'}" not found in Supabase. ` +
-                'Create it in Supabase Dashboard â†’ Storage, or set VITE_SUPABASE_STORAGE_BUCKET to match an existing bucket. ' +
+                'Create it in Supabase Dashboard → Storage, or set VITE_SUPABASE_STORAGE_BUCKET to match an existing bucket. ' +
                 'Falling back to direct upload for now.',
             );
           }
         }
-        res = await submitVideo(selectedFile);
+        res = await submitVideo(selectedFile, undefined, abortCtrl.signal);
       }
 
       addLocalJob(res.job_id, selectedFile.name || res.video_name);
@@ -266,13 +314,16 @@ export default function Dashboard() {
           ...(uploadResult?.publicUrl ? { sourcePublicUrl: uploadResult.publicUrl } : {}),
         }).catch(console.warn);
       }
+      toast.success('Analysis started!', `"${selectedFile.name}" is queued. You'll see live progress now.`);
       clearFile();
       navigate(`/analyze/progress/${res.job_id}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
-      setUploadError(msg.includes('fetch') || msg.includes('network')
-        ? 'Network error â€” check your connection and that the analysis server is online.'
-        : msg);
+      const display = msg.includes('fetch') || msg.includes('network')
+        ? 'Network error — check your connection and that the analysis server is online.'
+        : msg;
+      setUploadError(display);
+      toast.error('Upload failed', display);
     } finally {
       setIsUploading(false);
     }
@@ -288,10 +339,18 @@ export default function Dashboard() {
     initAnomalyChart(typed.fusion_insights || []);
 
     const newAlerts = (result.surveillance_events || [])
-      .filter((e: any) => e.severity === 'critical' || e.severity === 'high')
+      .filter((e) => e.severity === 'critical' || e.severity === 'high')
       .slice()
       .reverse();
-    setAlertsFeed(newAlerts.slice(0, 20));
+    setAlertsFeed(
+      newAlerts.slice(0, 20).map((e, i) => ({
+        id: `${e.event_type}-${e.timestamp_s}-${i}`,
+        event_type: e.event_type,
+        timestamp: fmtTime(e.timestamp_s),
+        description: e.description,
+        isCrit: e.severity === 'critical',
+      }))
+    );
   };
 
   const loadJobData = async (jobId: string) => {
@@ -307,15 +366,15 @@ export default function Dashboard() {
     }
   };
 
-  const pushAlert = (e: any, liveTs: number | null = null) => {
+  const pushAlert = (e: { severity?: string; event_type?: string; timestamp_s?: number; description?: string }, liveTs: number | null = null) => {
     setAlertsFeed(prev => {
       const isCrit = e.severity === 'critical';
-      const newAlert = {
+      const newAlert: AlertEntry = {
         id: Math.random().toString(),
         event_type: e.event_type || 'UNKNOWN',
-        timestamp: liveTs ? `${liveTs}s` : fmtTime(e.timestamp_s),
+        timestamp: liveTs != null ? `${liveTs}s` : fmtTime(e.timestamp_s ?? 0),
         description: e.description,
-        isCrit
+        isCrit,
       };
       const updated = [newAlert, ...prev];
       if (updated.length > 20) return updated.slice(0, 20);
@@ -323,7 +382,7 @@ export default function Dashboard() {
     });
   };
 
-  const initDensityChart = (frames: any[]) => {
+  const initDensityChart = (frames: { timestamp_s: number; person_count: number }[]) => {
     const canvas = document.getElementById('density-chart') as HTMLCanvasElement;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -352,13 +411,13 @@ export default function Dashboard() {
         plugins: { legend: { display: false } },
         scales: {
           x: { display: false },
-          y: { min: 0, grid: { color: 'rgba(255,255,255,0.05)' } as any, ticks: { color: '#6e7681', font: { size: 9 } } }
+          y: { min: 0, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6e7681', font: { size: 9 } } }
         }
       }
     });
   };
 
-  const initAnomalyChart = (ins: any[]) => {
+  const initAnomalyChart = (ins: { window_start_s: number; anomaly_score: number }[]) => {
     const canvas = document.getElementById('anomaly-chart') as HTMLCanvasElement;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -383,7 +442,7 @@ export default function Dashboard() {
         plugins: { legend: { display: false } },
         scales: {
           x: { display: true, grid: { display: false }, ticks: { color: '#6e7681', font: { size: 8 } } },
-          y: { min: 0, max: 1, grid: { color: 'rgba(255,255,255,0.05)' } as any, ticks: { color: '#6e7681', font: { size: 9 } } }
+          y: { min: 0, max: 1, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#6e7681', font: { size: 9 } } }
         }
       }
     });
@@ -421,9 +480,9 @@ export default function Dashboard() {
     }
   };
 
-  const connectLiveSocket = () => {
+  const connectLiveSocket = async () => {
     try {
-      const ws = new WebSocket(getLiveWsUrl());
+      const ws = new WebSocket(await getLiveWsUrl());
       liveWsRef.current = ws;
       ws.onmessage = (evt) => {
         try {
@@ -433,7 +492,7 @@ export default function Dashboard() {
             setLivePersons(msg.persons || 0);
             setLiveAction(msg.action || 'IDLE');
             if (Array.isArray(msg.alerts) && msg.alerts.length > 0) {
-              msg.alerts.forEach((a: any) => pushAlert(a, msg.ts));
+              msg.alerts.forEach((a: { severity?: string; event_type?: string; timestamp_s?: number; description?: string }) => pushAlert(a, msg.ts as number | null));
             }
           } else if (msg.type === 'live_stopped') {
             stopLive();
@@ -475,8 +534,10 @@ export default function Dashboard() {
     if (!ok) return;
     try {
       await deleteJob(jobId);
+      toast.success('Job deleted', 'Analysis job and all output files removed.');
     } catch (err) {
       console.warn('Backend job delete failed:', err);
+      toast.warning('Partial delete', 'Job removed from list but some files may remain on server.');
     }
     if (user && isSupabaseConfigured) {
       await deleteVideoUpload(user.id, jobId).catch(() => {});
@@ -490,10 +551,10 @@ export default function Dashboard() {
   const r = jobData;
   const distinctPeopleCount = r ? distinctPersonCount(r as AnalysisResult) : 0;
   const eventsCount = r ? (r.surveillance_events || []).length : 0;
-  const speechCount = r ? (r.speech_segments || []).filter((v: any) => !v.is_noise).length : 0;
+  const speechCount = r ? (r.speech_segments || []).filter((v) => !v.is_noise).length : 0;
   const risk = r?.risk_level || 'STABLE';
   const riskClass = risk === 'CRITICAL' ? 'text-rose-500' : risk === 'HIGH' ? 'text-orange-400' : 'text-cyan-400';
-  const displayJobs = useMemo(() => dedupeJobsByVideo(jobs), [jobs]);
+  const displayJobs = useMemo(() => dedupeJobsByVideo(jobs) ?? [], [jobs]);
   const uploadsByJob = useMemo(() => uploadsByJobId(userUploads), [userUploads]);
 
   const filteredJobs = displayJobs
@@ -560,7 +621,10 @@ export default function Dashboard() {
         )}
         {user && isSupabaseConfigured && healthKnown && health && !health.supabase_configured && (
             <UserBanner variant="warning">
-              Your account is connected, but the analysis server is not syncing to Supabase yet. Jobs are still saved from this browser; ask your admin to set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on Heroku.
+              Your account is connected, but the analysis server is not syncing to Supabase yet. Jobs are still saved in this browser.{' '}
+              {health.on_heroku
+                ? 'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your Heroku config vars.'
+                : 'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your backend .env file, then restart the server.'}
             </UserBanner>
         )}
         {!user && !isSupabaseConfigured && (
@@ -769,7 +833,7 @@ export default function Dashboard() {
                           <td colSpan={5} className="py-20 text-center text-slate-500 italic">No anomalies detected or load a completed job.</td>
                         </tr>
                       ) : (
-                        r.surveillance_events.map((e: any, idx: number) => (
+                        (r?.surveillance_events ?? []).map((e, idx) => (
                           <tr key={idx} className={`transition-colors group ${idx % 2 === 0 ? 'bg-white/[0.02]' : ''} hover:bg-white/5`}>
                               <td className="px-6 py-4 font-mono text-cyan-400 font-bold">{fmtTime(e.timestamp_s)}</td>
                               <td className="px-6 py-4">

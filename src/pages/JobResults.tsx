@@ -6,16 +6,19 @@ import {
   FileJson, Film, Download, ChevronDown, ChevronUp, Search,
   Clock, Activity, Brain, Eye, Zap, TrendingUp, CheckCircle,
   PersonStanding, Sparkles, Target, FileText, Maximize2, Layers,
+  Share2, Check,
   type LucideIcon,
 } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
 import {
   AnalysisResult, SurveillanceEvent,
   riskTextClass, riskBgClass, riskColor,
   severityBadgeClass, severityHex,
   fmtSeconds, fmtDuration,
-  getRagJsonUrl, getReportUrl, getVideoUrl,
+  getRagJsonUrl, getReportUrl, getPdfReportUrl, getVideoUrl,
   getTranslatedTranscript,
   distinctPersonCount, trackFragmentCount,
+  isValidJobId, getJobErrorMessage,
   type FrameAnalyticsPoint,
 } from '../lib/detectraApi';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,6 +28,7 @@ import { getLocalJobs } from '../lib/localJobSession';
 import EventTimeline from '../components/EventTimeline';
 import AIAssistant from '../components/AIAssistant';
 import Breadcrumbs from '../components/ui/Breadcrumbs';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 // ── Risk Gauge (semi-circle SVG) ────────────────────────────────────────────
 
@@ -118,7 +122,7 @@ function KeyFindings({ result }: { result: AnalysisResult }) {
     <div className="space-y-2.5">
       {findings.map((f, i) => (
         <motion.div
-          key={i}
+          key={f.text.slice(0, 48)}
           initial={{ opacity: 0, x: -8 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.1 + i * 0.06 }}
@@ -141,8 +145,8 @@ function EventFeed({ events }: { events: SurveillanceEvent[] }) {
 
   const filtered = events.filter(ev => {
     const matchSev = sevFilter === 'all' || ev.severity === sevFilter;
-    const matchQ   = !search || ev.description.toLowerCase().includes(search.toLowerCase())
-      || ev.event_type.toLowerCase().includes(search.toLowerCase());
+    const matchQ   = !search || ev.description?.toLowerCase().includes(search.toLowerCase())
+      || ev.event_type?.toLowerCase().includes(search.toLowerCase());
     return matchSev && matchQ;
   });
 
@@ -187,7 +191,7 @@ function EventFeed({ events }: { events: SurveillanceEvent[] }) {
       ) : (
         <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
           {filtered.map((ev, i) => (
-            <div key={i} className="rounded-xl border border-white/10 overflow-hidden">
+            <div key={`${ev.timestamp_s}-${ev.event_type}-${i}`} className="rounded-xl border border-white/10 overflow-hidden">
               <button
                 onClick={() => setExpanded(expanded === i ? null : i)}
                 className="w-full flex items-center gap-3 p-3 hover:bg-white/20 text-left transition-colors"
@@ -249,9 +253,9 @@ function FrameAnalyticsDeep({ points, durationS }: { points: FrameAnalyticsPoint
       <div>
         <p className="text-gray-500 text-xs uppercase tracking-widest mb-3">Crowd density (sampled frames)</p>
         <div className="flex items-end gap-px h-28 bg-black/30 rounded-xl p-2 border border-white/10">
-          {points.map((p, i) => (
+          {points.map((p) => (
             <div
-              key={i}
+              key={p.t}
               title={`${fmtSeconds(p.t)} · ${p.person_count} people`}
               className="flex-1 min-w-[2px] rounded-t-sm bg-gradient-to-t from-cyan-700 to-cyan-400/95 hover:opacity-90 transition-opacity"
               style={{ height: `${Math.max(8, (p.person_count / maxP) * 100)}%` }}
@@ -266,9 +270,9 @@ function FrameAnalyticsDeep({ points, durationS }: { points: FrameAnalyticsPoint
       <div>
         <p className="text-gray-500 text-xs uppercase tracking-widest mb-3">Scene motion (optical flow)</p>
         <div className="flex items-end gap-px h-24 bg-black/30 rounded-xl p-2 border border-white/10">
-          {points.map((p, i) => (
+          {points.map((p) => (
             <div
-              key={i}
+              key={`m-${p.t}`}
               title={`${fmtSeconds(p.t)} · motion ${p.motion.toFixed(3)}`}
               className="flex-1 min-w-[2px] rounded-t-sm bg-gradient-to-t from-violet-800 to-violet-400/95 opacity-95"
               style={{ height: `${Math.max(6, (p.motion / maxM) * 100)}%` }}
@@ -287,8 +291,8 @@ function FrameAnalyticsDeep({ points, durationS }: { points: FrameAnalyticsPoint
             </tr>
           </thead>
           <tbody>
-            {points.map((p, i) => (
-              <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+            {points.map((p) => (
+              <tr key={`r-${p.t}`} className="border-b border-white/5 hover:bg-white/5">
                 <td className="px-3 py-1.5 text-cyan-400 font-mono tabular-nums">{fmtSeconds(p.t)}</td>
                 <td className="px-3 py-1.5 text-white tabular-nums">{p.person_count}</td>
                 <td className="px-3 py-1.5 text-gray-400 tabular-nums">{p.motion.toFixed(3)}</td>
@@ -460,13 +464,17 @@ function Tab({ tabKey, label, icon: Icon, active, onClick }: {
 export default function JobResults() {
   const { jobId } = useParams<{ jobId: string }>();
   const { user }  = useAuth();
+  const toast     = useToast();
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [tab, setTab]         = useState<TabKey>('events');
+  const [copied, setCopied]   = useState(false);
   const [translateLang, setTranslateLang] = useState('en');
   const [translatedText, setTranslatedText] = useState('');
   const [translating, setTranslating] = useState(false);
+  const [retryCount, setRetryCount]   = useState(0);
+  const [reportIframeError, setReportIframeError] = useState(false);
 
   // Ref to prevent double-fetch: once we have a result, skip re-runs caused by user loading
   const gotResultRef = useRef(false);
@@ -475,6 +483,11 @@ export default function JobResults() {
 
   useEffect(() => {
     if (!jobId || gotResultRef.current) return;
+    if (!isValidJobId(jobId)) {
+      setError('Invalid analysis ID. Please go back and open a valid result.');
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
 
@@ -496,14 +509,12 @@ export default function JobResults() {
         setResult(r);
         gotResultRef.current = true;
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : 'Results not available';
+        const msg = e instanceof Error ? e.message : '';
         const incomplete = msg.toLowerCase().includes('not completed');
         setError(
-          msg.includes('403') || msg.toLowerCase().includes('access denied')
-            ? 'You do not have access to this analysis.'
-            : incomplete
-              ? 'This analysis is still processing. Open it from the progress page when it finishes.'
-              : msg || 'Results not available — the job may have been deleted or the server is offline.',
+          incomplete
+            ? 'This analysis is still processing. Open it from the progress page when it finishes.'
+            : getJobErrorMessage(e, jobId),
         );
       } finally {
         setLoading(false);
@@ -511,7 +522,21 @@ export default function JobResults() {
     };
 
     void load();
-  }, [jobId]);
+  }, [jobId, retryCount]);
+
+  async function handleShareResult() {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Detectra Analysis: ${result?.video_name || jobId}`, url });
+      } catch { /* user cancelled */ }
+    } else {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast.success('Link copied!', 'Share this URL to give others access to this analysis.');
+      setTimeout(() => setCopied(false), 2500);
+    }
+  }
 
   async function handleTranslateTranscript() {
     if (!jobId) return;
@@ -548,6 +573,14 @@ export default function JobResults() {
               <button className="btn-dark text-sm">View progress</button>
             </Link>
           )}
+          {!error.includes('still processing') && !error.includes('belong to another') && (
+            <button
+              className="btn-dark text-sm"
+              onClick={() => { gotResultRef.current = false; setError(''); setLoading(true); setRetryCount(c => c + 1); }}
+            >
+              Retry
+            </button>
+          )}
           <Link to="/analyze">
             <button className="btn-dark text-sm">Back to Analyzer</button>
           </Link>
@@ -556,7 +589,21 @@ export default function JobResults() {
     </div>
   );
 
-  if (!result) return null;
+  if (!result) return (
+    <div className="min-h-screen bg-transparent pt-24 flex items-center justify-center">
+      <div className="text-center">
+        <AlertTriangle className="w-14 h-14 text-yellow-400 mx-auto mb-4" />
+        <p className="text-gray-400 font-medium">No results available for this job.</p>
+        <Link to="/analyze" className="mt-5 inline-block">
+          <button className="px-4 py-2 rounded-lg bg-white/10 text-sm text-gray-300 hover:bg-white/20 transition-colors">Back to Analyzer</button>
+        </Link>
+      </div>
+    </div>
+  );
+
+  // jobId is guaranteed valid here — invalid IDs are caught by isValidJobId() in the
+  // useEffect above, which sets the error state and returns early before reaching this line.
+  if (!jobId) return null;
 
   const {
     video_name, duration_s, width, height, fps, total_frames,
@@ -567,6 +614,7 @@ export default function JobResults() {
     full_transcript, processing_time_s,
     severity_counts, top_objects, anomaly_timeline,
     frame_analytics,
+    crowd_density_score, face_count_peak, model_recommendation,
   } = result;
 
   const videoName     = video_name || 'Untitled';
@@ -600,15 +648,24 @@ export default function JobResults() {
             ]}
           />
           <div className="flex gap-2 flex-wrap ml-auto">
-            <a href={getRagJsonUrl(jobId!)} target="_blank" rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={handleShareResult}
+              title="Copy link to results"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-gray-700 text-gray-400 hover:text-white rounded-xl border border-white/20 text-xs transition-colors"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+              {copied ? 'Copied!' : 'Share'}
+            </button>
+            <a href={getRagJsonUrl(jobId)} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-gray-700 text-gray-400 hover:text-white rounded-xl border border-white/20 text-xs transition-colors">
               <FileJson className="w-3.5 h-3.5" />RAG JSON
             </a>
-            <a href={getReportUrl(jobId!)} target="_blank" rel="noopener noreferrer"
+            <a href={getReportUrl(jobId)} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-gray-700 text-gray-400 hover:text-white rounded-xl border border-white/20 text-xs transition-colors">
               <Download className="w-3.5 h-3.5" />Report
             </a>
-            <a href={getVideoUrl(jobId!)} target="_blank" rel="noopener noreferrer"
+            <a href={getVideoUrl(jobId)} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 rounded-xl border border-cyan-500/30 text-xs transition-colors">
               <Film className="w-3.5 h-3.5" />Labeled Video
             </a>
@@ -734,6 +791,54 @@ export default function JobResults() {
           <MetricCard icon={Eye}         label="Object Types"        value={Object.keys(class_frequencies).length} color="text-blue-400" bg="bg-blue-500/10" border="border-blue-500/20" />
         </motion.div>
 
+        {/* ── v7.1 Intelligence Cards (crowd density, face peak, model recommendation) ── */}
+        {(crowd_density_score != null || face_count_peak != null || model_recommendation) && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.06 }}
+            className="grid grid-cols-1 sm:grid-cols-3 gap-3"
+          >
+            {crowd_density_score != null && (
+              <div className="card-glass p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-orange-500/10 border border-orange-500/20 flex-shrink-0">
+                  <Users className="w-4 h-4 text-orange-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-gray-500 text-xs uppercase tracking-widest truncate">Crowd Density</p>
+                  <p className="text-white font-bold text-lg leading-tight">{(crowd_density_score * 100).toFixed(0)}%</p>
+                  <div className="mt-1 h-1.5 rounded-full bg-white/10 overflow-hidden w-full">
+                    <div className="h-full rounded-full bg-orange-400" style={{ width: `${Math.min(crowd_density_score * 100, 100)}%` }} />
+                  </div>
+                </div>
+              </div>
+            )}
+            {face_count_peak != null && (
+              <div className="card-glass p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 flex-shrink-0">
+                  <PersonStanding className="w-4 h-4 text-purple-400" />
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs uppercase tracking-widest">Peak Face Count</p>
+                  <p className="text-white font-bold text-lg leading-tight">{face_count_peak}</p>
+                  <p className="text-gray-600 text-xs">faces detected simultaneously</p>
+                </div>
+              </div>
+            )}
+            {model_recommendation && (
+              <div className="card-glass p-4 flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex-shrink-0 mt-0.5">
+                  <Sparkles className="w-4 h-4 text-cyan-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-gray-500 text-xs uppercase tracking-widest">Model Suggestion</p>
+                  <p className="text-white text-sm leading-snug mt-0.5 break-words">{model_recommendation}</p>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
         {/* ── Intelligence Timeline ── */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -756,7 +861,7 @@ export default function JobResults() {
         </motion.div>
 
         {/* ── Labeled Video Player ── */}
-        <VideoPlayer jobId={jobId!} />
+        <VideoPlayer jobId={jobId} />
 
         {/* ── Main content: two column ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -785,7 +890,20 @@ export default function JobResults() {
             <div className={tab === 'ai' ? '' : 'p-4'}>
 
               {/* AI Assistant */}
-              {tab === 'ai' && <AIAssistant result={result} jobId={jobId!} />}
+              {tab === 'ai' && (
+                <ErrorBoundary
+                  resetKeys={[jobId]}
+                  fallback={
+                    <div className="p-8 text-center">
+                      <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+                      <p className="text-red-300 text-sm font-medium">AI Assistant failed to load.</p>
+                      <p className="text-gray-500 text-xs mt-1">Check your Anthropic API key or try another tab.</p>
+                    </div>
+                  }
+                >
+                  <AIAssistant result={result} jobId={jobId} />
+                </ErrorBoundary>
+              )}
 
               {/* Events */}
               {tab === 'events' && <EventFeed events={surveillance_events} />}
@@ -801,7 +919,7 @@ export default function JobResults() {
                     <p className="text-center py-10 text-gray-600 text-sm">No fusion insights</p>
                   ) : (
                     fusion_insights.map((ins, i) => (
-                      <div key={i} className={`p-3 rounded-xl border text-sm ${
+                      <div key={`${ins.window_start_s}-${ins.window_end_s}-${i}`} className={`p-3 rounded-xl border text-sm ${
                         ins.alert ? 'border-orange-500/30 bg-orange-500/5' : 'border-white/10 bg-transparent/40'
                       }`}>
                         <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -887,8 +1005,8 @@ export default function JobResults() {
                     <p className="text-center py-10 text-gray-600 text-sm">No speech detected</p>
                   ) : (
                     <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                      {cleanSpeech.map((seg, i) => (
-                        <div key={i} className="flex gap-3 p-3 bg-transparent/50 rounded-xl border border-white/10">
+                      {cleanSpeech.map((seg) => (
+                        <div key={`${seg.start_s}-${seg.end_s}`} className="flex gap-3 p-3 bg-transparent/50 rounded-xl border border-white/10">
                           <div className="text-right flex-shrink-0 w-16">
                             <p className="text-cyan-400 text-xs font-mono">{fmtSeconds(seg.start_s)}</p>
                             <p className="text-gray-700 text-xs font-mono">{fmtSeconds(seg.end_s)}</p>
@@ -924,7 +1042,7 @@ export default function JobResults() {
                     <p className="text-center py-10 text-gray-600 text-sm">No audio events detected</p>
                   ) : (
                     audio_events.map((ae, i) => (
-                      <div key={i} className="flex items-center gap-4 p-3 bg-transparent/50 rounded-xl border border-white/10">
+                      <div key={`${ae.timestamp_s}-${ae.event_type}-${i}`} className="flex items-center gap-4 p-3 bg-transparent/50 rounded-xl border border-white/10">
                         <span className="text-yellow-400 text-xs font-mono w-12 flex-shrink-0">{fmtSeconds(ae.timestamp_s)}</span>
                         <div className="flex-1 min-w-0">
                           <p className="text-gray-200 text-sm capitalize">{ae.event_type.replace(/_/g, ' ')}</p>
@@ -987,26 +1105,56 @@ export default function JobResults() {
               {/* HTML Report */}
               {tab === 'report' && (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <p className="text-gray-500 text-xs uppercase tracking-widest">Generated Intelligence Report</p>
-                    <a
-                      href={getReportUrl(jobId!)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-xl border border-blue-500/20 text-xs transition-colors"
-                    >
-                      <Maximize2 className="w-3 h-3" />
-                      Open Full Report
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={getPdfReportUrl(jobId)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 text-xs transition-colors"
+                      >
+                        <Download className="w-3 h-3" />
+                        PDF
+                      </a>
+                      <a
+                        href={getReportUrl(jobId)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-xl border border-blue-500/20 text-xs transition-colors"
+                      >
+                        <Maximize2 className="w-3 h-3" />
+                        Open Full Report
+                      </a>
+                    </div>
                   </div>
                   <div className="rounded-xl overflow-hidden border border-white/10 bg-transparent">
-                    <iframe
-                      src={getReportUrl(jobId!)}
-                      className="w-full border-0"
-                      style={{ height: 480 }}
-                      title="Detectra AI Analysis Report"
-                      sandbox="allow-same-origin allow-scripts"
-                    />
+                    {reportIframeError ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-center gap-3">
+                        <FileText className="w-8 h-8 text-gray-600" />
+                        <p className="text-gray-500 text-sm">Report not available yet.</p>
+                        <a href={getReportUrl(jobId)} target="_blank" rel="noopener noreferrer"
+                          className="text-cyan-400 text-xs hover:underline">
+                          Try opening directly ↗
+                        </a>
+                      </div>
+                    ) : (
+                      <iframe
+                        src={getReportUrl(jobId)}
+                        className="w-full border-0"
+                        style={{ height: 480 }}
+                        title="Detectra AI Analysis Report"
+                        sandbox="allow-same-origin allow-scripts"
+                        onError={() => setReportIframeError(true)}
+                        onLoad={(e) => {
+                          try {
+                            const doc = (e.target as HTMLIFrameElement).contentDocument;
+                            if (!doc || doc.title.includes('404') || doc.body?.innerHTML?.trim() === '')
+                              setReportIframeError(true);
+                          } catch { /* cross-origin — assume OK */ }
+                        }}
+                      />
+                    )}
                   </div>
                   <p className="text-gray-700 text-xs text-center">
                     Report generated by the backend · includes all detection data, charts, and summary narrative
@@ -1104,17 +1252,17 @@ export default function JobResults() {
             <div className="card-glass p-5">
               <h3 className="text-gray-400 text-xs uppercase tracking-widest mb-3">Export</h3>
               <div className="space-y-2">
-                <a href={getRagJsonUrl(jobId!)} target="_blank" rel="noopener noreferrer"
+                <a href={getRagJsonUrl(jobId)} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2 w-full px-3 py-2.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 rounded-xl border border-cyan-500/20 text-sm transition-colors">
                   <FileJson className="w-4 h-4 flex-shrink-0" />
                   <span className="flex-1">RAG JSON</span>
                 </a>
-                <a href={getReportUrl(jobId!)} target="_blank" rel="noopener noreferrer"
+                <a href={getReportUrl(jobId)} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2 w-full px-3 py-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-xl border border-blue-500/20 text-sm transition-colors">
                   <Download className="w-4 h-4 flex-shrink-0" />
                   <span className="flex-1">HTML Report</span>
                 </a>
-                <a href={getVideoUrl(jobId!)} target="_blank" rel="noopener noreferrer"
+                <a href={getVideoUrl(jobId)} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2 w-full px-3 py-2.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-xl border border-purple-500/20 text-sm transition-colors">
                   <Film className="w-4 h-4 flex-shrink-0" />
                   <span className="flex-1">Labeled Video</span>

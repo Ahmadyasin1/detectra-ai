@@ -2,6 +2,7 @@ import type { JobStatus } from './detectraApi';
 import { getJobStatus } from './detectraApi';
 import { getVideoUploadByJobId } from './supabaseDb';
 import { isSupabaseConfigured } from './supabase';
+import { getLocalJobs } from './localJobSession';
 
 /** Strict: only rows explicitly owned by this user (no anonymous / unassigned leak). */
 export function filterJobsForUser(jobs: JobStatus[], userId: string): JobStatus[] {
@@ -30,8 +31,12 @@ export async function userCanAccessJob(userId: string, jobId: string): Promise<b
 
   try {
     const status = await getJobStatus(jobId);
-    return status.user_id === userId;
-  } catch {
+    if (status.user_id === userId) return true;
+    if (status.user_id === 'anonymous' && getLocalJobs().some((e) => e.job_id === jobId)) {
+      return true;
+    }
     return false;
+  } catch {
+    return getLocalJobs().some((e) => e.job_id === jobId);
   }
 }
