@@ -1,12 +1,10 @@
 import { motion } from 'framer-motion';
 import { useInView } from 'framer-motion';
 import { useRef, useState } from 'react';
-import { Mail, MapPin, Phone, Send, CheckCircle, AlertCircle, Users } from 'lucide-react';
+import { Mail, MapPin, Phone, Send, CheckCircle, AlertCircle, Sparkles, Users } from 'lucide-react';
 
 import PageHero from '../components/PageHero';
 import { submitContactForm } from '../lib/supabaseDb';
-import { CONTACT_EMAIL } from '../constants/contact';
-import TeamPhotoCard from '../components/TeamPhotoCard';
 
 export default function Contact() {
   const ref = useRef(null);
@@ -18,16 +16,6 @@ export default function Contact() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.email.trim() || !formData.message.trim()) {
-      setSubmitStatus('error');
-      setSubmitErrorMsg('Please fill in all fields before submitting.');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      setSubmitStatus('error');
-      setSubmitErrorMsg('Please enter a valid email address.');
-      return;
-    }
     setIsSubmitting(true);
     setSubmitErrorMsg(null);
     const { error } = await submitContactForm({
@@ -39,7 +27,7 @@ export default function Contact() {
       setSubmitStatus('error');
       setSubmitErrorMsg(
         error === 'guest_mode'
-          ? `Online form is unavailable right now — please email us directly at ${CONTACT_EMAIL}.`
+          ? 'Online form is unavailable right now — please email us directly at mianahmadyasin3@gmail.com.'
           : error,
       );
     } else {
@@ -78,7 +66,7 @@ export default function Contact() {
     {
       name:  'Ahmad Yasin',
       role:  'AI Engineer · Lead Developer',
-      email: CONTACT_EMAIL,
+      email: 'mianahmadyasin3@gmail.com',
     },
     {
       name:  'Eman Sarfraz',
@@ -165,7 +153,38 @@ export default function Contact() {
               BSAI Final Year Project · University of Central Punjab, Lahore
             </p>
           </motion.div>
-          <TeamPhotoCard />
+
+          <motion.div
+            initial={{ opacity: 0, y: 32, scale: 0.98 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            viewport={{ once: true, margin: '-40px' }}
+            transition={{ duration: 0.7, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+            className="group relative"
+          >
+            <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.12 }}
+            className="max-w-5xl mx-auto mb-16"
+          >
+            <div className="relative rounded-3xl overflow-hidden border border-cyan-500/25 bg-white/5 backdrop-blur-md shadow-2xl shadow-cyan-500/10">
+              <img
+                src="/3 nomony.png"
+                alt="Detectra AI team group"
+                className="w-full h-[260px] sm:h-[660px] object-cover"
+              />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-5 sm:p-7">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 text-xs font-semibold uppercase tracking-widest mb-3">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Detectra AI Core Team
+                </div>
+                <p className="text-white text-sm sm:text-base font-medium">
+                  Abdul Rehman , Ahmad Yasin , Eman Sarfraz 
+                </p>
+              </div>
+            </div>
+          </motion.div>
+          </motion.div>
         </div>
       </section>
 

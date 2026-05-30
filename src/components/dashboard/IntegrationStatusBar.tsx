@@ -1,4 +1,4 @@
-import { Cloud, Database, Server, User } from 'lucide-react';
+import { Cloud, Database, Server, User, Cpu, Zap } from 'lucide-react';
 import type { IntegrationSnapshot } from '../../lib/integration';
 
 function Pill({
@@ -6,19 +6,25 @@ function Pill({
   label,
   detail,
   icon: Icon,
+  accent,
 }: {
   ok: boolean;
   label: string;
   detail?: string;
   icon: typeof Server;
+  accent?: 'purple' | 'cyan';
 }) {
+  const baseClass = accent === 'purple'
+    ? 'border-purple-500/30 bg-purple-500/10 text-purple-200'
+    : accent === 'cyan'
+    ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200'
+    : ok
+    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+    : 'border-amber-500/25 bg-amber-500/10 text-amber-200/90';
+
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${
-        ok
-          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-          : 'border-amber-500/25 bg-amber-500/10 text-amber-200/90'
-      }`}
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${baseClass}`}
       title={detail}
     >
       <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -85,11 +91,39 @@ export default function IntegrationStatusBar({ snapshot }: { snapshot: Integrati
             ? 'Waiting for health check'
             : api.serverSupabaseSync
               ? 'API syncs job history to Supabase in real-time'
-              : api.onHeroku
-                ? 'Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in Heroku config vars'
-                : 'Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in backend .env, then restart'
+              : 'Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in backend .env, then restart'
         }
       />
+
+      {/* GPU / CPU mode pill — shown when health is known */}
+      {snapshot.healthKnown && (
+        <Pill
+          icon={api.gpuMode ? Zap : Cpu}
+          ok={api.gpuMode ?? false}
+          accent={api.gpuMode ? 'purple' : undefined}
+          label={
+            api.gpuMode
+              ? `GPU · ${api.gpuName?.split(' ').slice(-2).join(' ') ?? 'CUDA'}`
+              : 'CPU mode'
+          }
+          detail={
+            api.gpuMode
+              ? `GPU accelerated · ${api.yoloModel ?? ''} · Whisper ${api.whisperModel ?? ''}`
+              : `CPU inference · ${api.yoloModel ?? ''} · Whisper ${api.whisperModel ?? ''}`
+          }
+        />
+      )}
+
+      {/* Active AI modules badge */}
+      {snapshot.healthKnown && api.activeModules && api.activeModules.length > 0 && (
+        <Pill
+          icon={Zap}
+          ok
+          accent="cyan"
+          label={`${api.activeModules.length} modules`}
+          detail={`Active: ${api.activeModules.join(' · ')}`}
+        />
+      )}
     </div>
   );
 }

@@ -177,11 +177,18 @@ export interface ApiHealth {
   multiagent_enabled?: boolean;
   opencv?:             string;
   uptime_s?:           number;
+  // v7.3 — GPU / deployment info
+  gpu_mode?:           boolean;
+  gpu_name?:           string | null;
+  deploy_mode?:        string;
+  active_modules?:     string[];
   models?: {
     yolo_seg?:       string;
     yolo_pose?:      string;
     whisper?:        string;
     faster_whisper?: boolean;
+    yolo_imgsz?:     number;
+    analysis_fps?:   number;
   };
 }
 
@@ -481,6 +488,18 @@ export function getJobErrorMessage(err: unknown, jobId?: string): string {
   return `${msg}${suffix}`;
 }
 
+function _notifyHeaders(): Record<string, string> {
+  function lp(key: string): string {
+    try { const v = localStorage.getItem(key); return (v === null || v === '1') ? '1' : '0'; }
+    catch { return '1'; }
+  }
+  return {
+    'X-Notify-Complete': lp('detectra_notify_complete'),
+    'X-Notify-Critical': lp('detectra_notify_critical'),
+    'X-Notify-Failed':   lp('detectra_notify_failed'),
+  };
+}
+
 export async function submitVideo(
   file: File,
   _onProgress?: (pct: number) => void,
@@ -499,7 +518,7 @@ export async function submitVideo(
     const res = await fetch(apiUrl('/api/analyze'), {
       method: 'POST',
       body: form,
-      headers: headers as Record<string, string>,
+      headers: { ...(headers as Record<string, string>), ..._notifyHeaders() },
       signal: controller.signal,
     });
 
@@ -549,6 +568,7 @@ export async function submitVideoFromUrl(
       headers: {
         'Content-Type': 'application/json',
         ...headers,
+        ..._notifyHeaders(),
       },
     },
   );
@@ -727,6 +747,72 @@ export function statusBadgeClass(status: JobStatusValue | string): string {
     case 'failed':    return 'text-red-400 bg-red-500/20';
     default:          return 'text-gray-400 bg-gray-500/20';
   }
+}
+
+/** Human-readable label for any event_type string from the backend. */
+export function eventTypeLabel(eventType: string): string {
+  const labels: Record<string, string> = {
+    fall:                'Person Fell',
+    fight:               'Physical Altercation',
+    loitering:           'Loitering',
+    crowd_surge:         'Crowd Surge',
+    stampede:            'Stampede / Mass Flight',
+    abandoned_object:    'Abandoned Object',
+    weapon_proximity:    'Weapon Detected Nearby',
+    tailgating:          'Tailgating',
+    person_vanished:     'Person Vanished',
+    scream:              'Scream Detected',
+    gunshot:             'Gunshot',
+    explosion:           'Explosion',
+    siren:               'Siren / Emergency',
+    alarm:               'Alarm',
+    glass_breaking:      'Glass Breaking',
+    aggressive_shouting: 'Aggressive Shouting',
+    distress_cry:        'Distress / Crying',
+    crowd_noise:         'Crowd Noise',
+    fire_detected:       'Fire Detected',
+    smoke_detected:      'Smoke Detected',
+    speed_violation:     'Speed Violation / Sprint',
+    direction_reversal:  'Sudden Direction Reversal',
+    vehicle_sound:       'Vehicle Sound',
+    suspicious_sound:    'Suspicious Sound',
+    animal_sound:        'Animal Sound',
+    music:               'Music Detected',
+    speech:              'Speech Detected',
+    intrusion:           'Intrusion',
+  };
+  return labels[eventType] ?? eventType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/** Emoji icon for a surveillance event type. */
+export function eventTypeEmoji(eventType: string): string {
+  const icons: Record<string, string> = {
+    fall:                '🤕',
+    fight:               '⚔️',
+    loitering:           '🚶',
+    crowd_surge:         '👥',
+    stampede:            '🏃',
+    abandoned_object:    '🎒',
+    weapon_proximity:    '🔫',
+    tailgating:          '👥',
+    person_vanished:     '👻',
+    scream:              '😱',
+    gunshot:             '💥',
+    explosion:           '💣',
+    siren:               '🚨',
+    alarm:               '🔔',
+    glass_breaking:      '🪟',
+    aggressive_shouting: '📢',
+    distress_cry:        '😢',
+    crowd_noise:         '🔊',
+    fire_detected:       '🔥',
+    smoke_detected:      '💨',
+    speed_violation:     '⚡',
+    direction_reversal:  '↩️',
+    vehicle_sound:       '🚗',
+    suspicious_sound:    '⚠️',
+  };
+  return icons[eventType] ?? '🔍';
 }
 
 export function fmtSeconds(s: number): string {

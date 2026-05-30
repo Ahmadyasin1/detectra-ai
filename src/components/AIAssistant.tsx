@@ -101,23 +101,33 @@ export default function AIAssistant({ result, jobId }: { result: AnalysisResult;
 
     try {
       let reply: string;
+
       if (jobId) {
         try {
+          // Primary: server-side Gemini RAG (best quality)
           const r = await askJobQuestion(jobId, trimmed);
           reply = r.answer;
         } catch {
-          reply = await chatWithVideo(context, newHistory);
+          // Fallback: client-side (direct extraction → roberta QA → graceful degradation)
+          reply = await chatWithVideo(context, newHistory, result);
         }
       } else {
-        reply = await chatWithVideo(context, newHistory);
+        // No jobId: client-side only
+        reply = await chatWithVideo(context, newHistory, result);
       }
-      if (!reply?.trim()) throw new Error('Empty response from AI — please try again.');
+
+      if (!reply?.trim()) {
+        reply = 'No answer could be generated for this question. Try rephrasing it.';
+      }
       setMessages(prev => [...prev, { role: 'assistant', content: reply.trim() }]);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to get AI response';
-      // Keep the user message in history; append an error assistant turn so the
-      // user can see what failed without losing their question and having to retype.
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠ ${msg}` }]);
+      const raw = e instanceof Error ? e.message : String(e);
+      // Show a friendlier message instead of raw network errors
+      const msg = raw.includes('fetch') || raw.includes('network')
+        ? 'Network error — check your connection and that the analysis server is running.'
+        : raw;
+      setError(msg);
+      setMessages(prev => prev.slice(0, -1));
     } finally {
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 100);
@@ -142,7 +152,7 @@ export default function AIAssistant({ result, jobId }: { result: AnalysisResult;
         <div className="flex-1 min-w-0">
           <p className="text-white font-semibold text-sm leading-none">AI Video Assistant</p>
           <p className="text-gray-500 text-xs mt-0.5">
-            {jobId ? 'Server RAG + Mistral (Detectra API)' : 'Mistral-7B · HuggingFace Inference'}
+            {jobId ? 'Gemini RAG · instant local fallback' : 'Local analysis · roberta-base QA'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -177,14 +187,14 @@ export default function AIAssistant({ result, jobId }: { result: AnalysisResult;
             <div className="px-5 py-3 bg-purple-500/8 border-b border-purple-500/20 text-xs text-gray-400 leading-relaxed">
               {jobId ? (
                 <>
-                  Questions are sent to your <span className="text-purple-300 font-medium">Detectra API</span> (<code className="px-1 bg-white/10 rounded text-purple-300">/api/jobs/…/ask</code>)
-                  with the same RAG context as the analyzer report. Configure <code className="px-1 bg-white/10 rounded text-purple-300">HF_TOKEN</code> on the server for reliable answers.
-                  If the API is unavailable, the client falls back to direct HuggingFace calls when <code className="px-1 bg-white/10 rounded text-purple-300">VITE_HF_TOKEN</code> is set.
+                  <span className="text-purple-300 font-medium">3-layer fallback</span> — common questions are answered instantly from analysis data (no API). Complex questions go to{' '}
+                  <span className="text-purple-300 font-medium">Gemini 1.5 Flash</span> via server RAG, then{' '}
+                  <span className="text-purple-300 font-medium">roberta-base-squad2</span> (always-warm, free, no auth). The chatbot always responds.
                 </>
               ) : (
                 <>
-                  This assistant uses <span className="text-purple-300 font-medium">Mistral-7B-Instruct-v0.2</span> via HuggingFace Inference API with analysis context embedded in the prompt.
-                  Add <code className="px-1 bg-white/10 rounded text-purple-300">VITE_HF_TOKEN</code> for higher rate limits. For production, prefer opening results from a completed job so the server-backed RAG path is used.
+                  <span className="text-purple-300 font-medium">2-layer fallback</span> — common questions answered instantly from analysis data. Other questions use{' '}
+                  <span className="text-purple-300 font-medium">roberta-base-squad2</span> (extractive QA, always-warm, free). Open a completed job for the full Gemini RAG pipeline.
                 </>
               )}
             </div>
@@ -320,7 +330,7 @@ export default function AIAssistant({ result, jobId }: { result: AnalysisResult;
         <div className="flex items-center justify-between mt-2 px-1">
           <p className="text-gray-700 text-[11px]">Shift+Enter for new line · Enter to send</p>
           <p className="text-gray-700 text-[11px]">
-            {HF_TOKEN ? '🔑 Auth enabled' : 'Free tier · may be slow'}
+            {HF_TOKEN ? '🔑 HF auth enabled' : 'Free tier · first response may be slow'}
           </p>
         </div>
       </div>

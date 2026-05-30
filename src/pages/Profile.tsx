@@ -1,20 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   User, Mail, Calendar, Edit2, Save, X, LogOut, UserCircle,
   Github, LayoutDashboard, CheckCircle, Activity, AlertTriangle,
-  Film, Shield, Clock, ChevronRight, Bell, Send, Loader2,
+  Film, Shield, Clock, ChevronRight, Bell, Send,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserVideoUploads, videoUrlToJobId, type VideoUpload } from '../lib/supabaseDb';
 import { useToast } from '../contexts/ToastContext';
 import { apiUrl } from '../lib/detectraApi';
+function loadPref(key: string, def = true) {
+  try { const v = localStorage.getItem(key); return v === null ? def : v === '1'; }
+  catch { return def; }
+}
+function savePref(key: string, val: boolean) {
+  try { localStorage.setItem(key, val ? '1' : '0'); } catch { /* quota */ }
+}
 
 export default function Profile() {
   const { user, profile, loading: authLoading, signOut, updateProfile } = useAuth();
   const navigate = useNavigate();
   const toast    = useToast();
+
   const [isEditing, setIsEditing]       = useState(false);
   const [fullName, setFullName]         = useState('');
   const [githubUsername, setGithubUsername] = useState('');
@@ -26,14 +34,40 @@ export default function Profile() {
   const [uploads, setUploads]           = useState<VideoUpload[]>([]);
   const [uploadsLoading, setUploadsLoading] = useState(false);
 
-  // Notification preferences (stored in localStorage — Supabase user_metadata optional)
-  const [notifyComplete, setNotifyComplete] = useState<boolean>(() =>
-    localStorage.getItem('detectra_notify_complete') !== 'false');
-  const [notifyFailed,   setNotifyFailed]   = useState<boolean>(() =>
-    localStorage.getItem('detectra_notify_failed')   !== 'false');
-  const [notifyCritical, setNotifyCritical] = useState<boolean>(() =>
-    localStorage.getItem('detectra_notify_critical') !== 'false');
-  const [testEmailSending, setTestEmailSending] = useState(false);
+  // ── Email notification preferences ─────────────────────────────────────────
+  const [notifyComplete, setNotifyComplete] = useState(() => loadPref('detectra_notify_complete'));
+  const [notifyCritical, setNotifyCritical] = useState(() => loadPref('detectra_notify_critical'));
+  const [notifyFailed,   setNotifyFailed]   = useState(() => loadPref('detectra_notify_failed'));
+  const [testingEmail,   setTestingEmail]   = useState(false);
+
+  const toggle = useCallback((
+    setter: React.Dispatch<React.SetStateAction<boolean>>,
+    key: string,
+    next: boolean,
+  ) => { setter(next); savePref(key, next); }, []);
+
+  const sendTestEmail = useCallback(async () => {
+    setTestingEmail(true);
+    try {
+      const res  = await fetch(apiUrl('/api/notifications/test'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user?.email }),
+      });
+      const data = await res.json() as { ok?: boolean; to?: string; error?: string; detail?: string };
+      if (res.ok && data.ok) {
+        toast.success('Test email sent!', `Check your inbox at ${data.to ?? user?.email}`);
+      } else if (res.status === 503) {
+        toast.warning('Email not configured', 'Add SMTP_HOST / SMTP_USER / SMTP_PASS to detectra-ai/backend/.env');
+      } else {
+        toast.error('Email failed', data.error ?? data.detail ?? 'Unknown SMTP error');
+      }
+    } catch {
+      toast.error('Request failed', 'Could not reach the API server.');
+    } finally {
+      setTestingEmail(false);
+    }
+  }, [user, toast]);
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/signin', { state: { from: { pathname: '/profile' } } });
@@ -58,12 +92,7 @@ export default function Profile() {
   }, [user]);
 
   const handleSave = async () => {
-    setError(null); setSuccess(false);
-    if (avatarUrl.trim() && !/^https?:\/\//i.test(avatarUrl.trim())) {
-      setError('Avatar URL must start with https:// or http://');
-      return;
-    }
-    setSaving(true);
+    setError(null); setSuccess(false); setSaving(true);
     const { error } = await updateProfile({
       full_name: fullName.trim() || null,
       github_username: githubUsername.trim() || null,
@@ -84,29 +113,6 @@ export default function Profile() {
   };
 
   const handleSignOut = async () => { await signOut(); navigate('/'); };
-
-  const saveNotifyPref = (key: string, value: boolean) => {
-    localStorage.setItem(key, String(value));
-  };
-
-  const handleTestEmail = async () => {
-    setTestEmailSending(true);
-    try {
-      const res = await fetch(apiUrl('/api/notifications/test'), { method: 'POST' });
-      const data = await res.json() as { sent: boolean; to: string | null; configured: boolean; error: string | null };
-      if (data.sent) {
-        toast.success('Test email sent!', `Check your inbox at ${data.to}`);
-      } else if (!data.configured) {
-        toast.warning('Email not configured', 'Ask your admin to set SMTP_HOST, SMTP_USER, SMTP_PASS on the server.');
-      } else {
-        toast.error('Email failed', data.error ?? 'Unknown SMTP error — check server logs.');
-      }
-    } catch {
-      toast.error('Request failed', 'Could not reach the API server.');
-    } finally {
-      setTestEmailSending(false);
-    }
-  };
 
   if (authLoading) return (
     <div className="min-h-screen pt-24 flex items-center justify-center relative overflow-hidden">
@@ -257,7 +263,7 @@ export default function Profile() {
 
               {/* Email (read-only) */}
               <div>
-                <label className="inline-flex text-gray-500 text-xs font-medium mb-2 uppercase tracking-wider items-center gap-1.5">
+                <label className="block text-gray-500 text-xs font-medium mb-2 uppercase tracking-wider flex items-center gap-1.5">
                   <Mail className="w-3 h-3" />Email
                 </label>
                 <div className="px-4 py-2.5 bg-white/10 rounded-xl text-gray-500 text-sm border border-white/10 flex items-center justify-between">
@@ -268,7 +274,7 @@ export default function Profile() {
 
               {/* GitHub */}
               <div>
-                <label className="inline-flex text-gray-500 text-xs font-medium mb-2 uppercase tracking-wider items-center gap-1.5">
+                <label className="block text-gray-500 text-xs font-medium mb-2 uppercase tracking-wider flex items-center gap-1.5">
                   <Github className="w-3 h-3" />GitHub Username
                 </label>
                 {isEditing ? (
@@ -294,7 +300,7 @@ export default function Profile() {
 
               {/* Avatar URL */}
               <div className="sm:col-span-2">
-                <label className="inline-flex text-gray-500 text-xs font-medium mb-2 uppercase tracking-wider items-center gap-1.5">
+                <label className="block text-gray-500 text-xs font-medium mb-2 uppercase tracking-wider flex items-center gap-1.5">
                   Avatar Image URL
                 </label>
                 {isEditing ? (
@@ -320,7 +326,7 @@ export default function Profile() {
 
               {/* Member Since */}
               <div>
-                <label className="inline-flex text-gray-500 text-xs font-medium mb-2 uppercase tracking-wider items-center gap-1.5">
+                <label className="block text-gray-500 text-xs font-medium mb-2 uppercase tracking-wider flex items-center gap-1.5">
                   <Calendar className="w-3 h-3" />Member Since
                 </label>
                 <div className="px-4 py-2.5 bg-white/10 rounded-xl text-gray-500 text-sm border border-white/10">
@@ -412,45 +418,46 @@ export default function Profile() {
             )}
           </motion.div>
 
-          {/* ── Email Notifications ── */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
-            className="card-glass p-6 sm:p-8 mb-6">
-
+          {/* ── Email Notifications ─────────────────────────────────────── */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}
+            className="card-glass p-6 sm:p-8 mt-6"
+          >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-white font-semibold flex items-center gap-2">
                 <Bell className="w-4 h-4 text-cyan-400" />
                 Email Notifications
               </h2>
-              <span className="text-xs text-gray-500 border border-white/10 rounded-full px-3 py-1">
-                Sent to: {user.email}
+              <span className="text-xs text-gray-500 border border-white/10 rounded-full px-3 py-1 truncate max-w-[180px]">
+                {user.email}
               </span>
             </div>
 
             <div className="space-y-3 mb-6">
-              {[
+              {([
                 {
-                  key: 'detectra_notify_complete',
+                  key:   'detectra_notify_complete',
                   label: 'Analysis complete',
-                  desc: 'Receive a summary email with risk level, stats, and download links when a job finishes.',
+                  desc:  'Receive a summary email with risk level, stats, and download links when a job finishes.',
                   value: notifyComplete,
-                  set: (v: boolean) => { setNotifyComplete(v); saveNotifyPref('detectra_notify_complete', v); },
+                  set:   (v: boolean) => toggle(setNotifyComplete, 'detectra_notify_complete', v),
                 },
                 {
-                  key: 'detectra_notify_critical',
+                  key:   'detectra_notify_critical',
                   label: 'Critical / High risk alerts',
-                  desc: 'Get an immediate alert when a video is classified as HIGH or CRITICAL risk.',
+                  desc:  'Get an immediate alert when a video is classified HIGH or CRITICAL.',
                   value: notifyCritical,
-                  set: (v: boolean) => { setNotifyCritical(v); saveNotifyPref('detectra_notify_critical', v); },
+                  set:   (v: boolean) => toggle(setNotifyCritical, 'detectra_notify_critical', v),
                 },
                 {
-                  key: 'detectra_notify_failed',
+                  key:   'detectra_notify_failed',
                   label: 'Analysis failed',
-                  desc: 'Be notified with the error message when analysis cannot complete.',
+                  desc:  'Be notified with the error message when analysis cannot complete.',
                   value: notifyFailed,
-                  set: (v: boolean) => { setNotifyFailed(v); saveNotifyPref('detectra_notify_failed', v); },
+                  set:   (v: boolean) => toggle(setNotifyFailed, 'detectra_notify_failed', v),
                 },
-              ].map(({ key, label, desc, value, set }) => (
-                <div key={key} className="flex items-start justify-between gap-4 p-4 rounded-xl border border-white/8 bg-white/[0.02] hover:border-white/15 transition-colors">
+              ] as { key: string; label: string; desc: string; value: boolean; set: (v: boolean) => void }[]).map(({ key, label, desc, value, set }) => (
+                <div key={key} className="flex items-start justify-between gap-4 p-4 rounded-xl border border-white/[0.08] bg-white/[0.02] hover:border-white/15 transition-colors">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-white">{label}</p>
                     <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{desc}</p>
@@ -462,44 +469,35 @@ export default function Profile() {
                     onClick={() => set(!value)}
                     className={`relative shrink-0 h-6 w-11 rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 ${value ? 'bg-cyan-500' : 'bg-gray-700'}`}
                   >
-                    <span
-                      className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${value ? 'translate-x-5' : 'translate-x-0'}`}
-                    />
+                    <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${value ? 'translate-x-5' : 'translate-x-0'}`} />
                     <span className="sr-only">{value ? 'Enabled' : 'Disabled'}</span>
                   </button>
                 </div>
               ))}
             </div>
 
-            {/* Test email button */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-cyan-500/15 bg-cyan-500/5">
-              <div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-cyan-500/15 bg-cyan-500/[0.04]">
+              <div className="min-w-0">
                 <p className="text-sm font-semibold text-white flex items-center gap-2">
                   <Send className="h-4 w-4 text-cyan-400" />
                   Send test email
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Verify SMTP is configured and your email is reachable.
+                  Verify your SMTP configuration works. Requires SMTP vars in{' '}
+                  <code className="text-cyan-400 text-[10px]">backend/.env</code>.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={handleTestEmail}
-                disabled={testEmailSending}
-                className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/20 transition disabled:opacity-60 shrink-0 min-h-[44px]"
+                onClick={sendTestEmail}
+                disabled={testingEmail}
+                className="shrink-0 flex items-center gap-2 px-4 py-2 bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 rounded-xl text-sm font-medium hover:bg-cyan-500/25 transition-colors disabled:opacity-50"
               >
-                {testEmailSending
-                  ? <><Loader2 className="h-4 w-4 animate-spin" />Sending…</>
-                  : <><Send className="h-4 w-4" />Send test</>}
+                {testingEmail
+                  ? <><span className="h-3.5 w-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />Sending…</>
+                  : <><Send className="h-3.5 w-3.5" />Send test</>}
               </button>
             </div>
-
-            <p className="mt-4 text-xs text-gray-600">
-              Email notifications require SMTP to be configured on the server.{' '}
-              <Link to="/faq" className="text-cyan-400/70 hover:text-cyan-400 transition-colors">
-                See FAQ →
-              </Link>
-            </p>
           </motion.div>
 
         </div>

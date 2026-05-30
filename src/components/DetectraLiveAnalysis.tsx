@@ -288,7 +288,7 @@ export default function DetectraLiveAnalysis() {
       setJobId(jid);
 
       // WebSocket progress
-      const ws = new WebSocket(await getWsUrl(jid));
+      const ws = new WebSocket(getWsUrl(jid));
       wsRef.current = ws;
 
       ws.onmessage = async (evt) => {

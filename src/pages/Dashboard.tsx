@@ -24,6 +24,7 @@ import JobLibraryPanel from '../components/dashboard/JobLibraryPanel';
 import { dedupeJobsByVideo } from '../lib/dedupeJobs';
 import UserBanner from '../components/ui/UserBanner';
 import { validateVideoFile, formatFileSize } from '../lib/userFacing';
+import { useToast } from '../contexts/ToastContext';
 import './Dashboard.css';
 import {
   createVideoUpload,
@@ -37,7 +38,6 @@ import { buildIntegrationSnapshot } from '../lib/integration';
 import IntegrationStatusBar from '../components/dashboard/IntegrationStatusBar';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { addLocalJob, removeLocalJob, getLocalJobs } from '../lib/localJobSession';
-import { useToast } from '../contexts/ToastContext';
 import { syncUserJobLibraryToDatabase } from '../lib/jobPersistence';
 import { loadJobAnalysisResult, jobIsViewable } from '../lib/loadJobResult';
 
@@ -102,7 +102,7 @@ const fmtTime = (s: number) => {
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const toast = useToast();
+  const toast    = useToast();
   
   const [apiOnline, setApiOnline] = useState(false);
   const [backendStatus, setBackendStatus] = useState('Initializing...');
@@ -137,11 +137,9 @@ export default function Dashboard() {
   const [alertsFeed, setAlertsFeed] = useState<AlertEntry[]>([]);
 
   // Refs
-  const liveWsRef      = useRef<WebSocket | null>(null);
-  const densityChartRef= useRef<InstanceType<typeof Chart> | null>(null);
-  const anomalyChartRef= useRef<InstanceType<typeof Chart> | null>(null);
-  const uploadAbortRef = useRef<AbortController | null>(null);
-  const mountedRef     = useRef(true);
+  const liveWsRef = useRef<WebSocket | null>(null);
+  const densityChartRef = useRef<InstanceType<typeof Chart> | null>(null);
+  const anomalyChartRef = useRef<InstanceType<typeof Chart> | null>(null);
 
   const checkServerHealth = async () => {
     try {
@@ -177,11 +175,11 @@ export default function Dashboard() {
           loadSecureUserJobHistory(user.id),
           getUserVideoUploads(user.id).catch(() => []),
         ]);
-        if (mountedRef.current) setJobs(merged);
-        if (mountedRef.current) setUserUploads(uploads);
+        setJobs(merged);
+        setUserUploads(uploads);
         void syncUserJobLibraryToDatabase(user.id, merged).then(async () => {
           const refreshed = await getUserVideoUploads(user.id).catch(() => []);
-          if (mountedRef.current && refreshed.length) setUserUploads(refreshed);
+          if (refreshed.length) setUserUploads(refreshed);
         });
         return;
       }
@@ -202,47 +200,25 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    const TERMINAL = new Set(['completed', 'failed', 'cancelled']);
-    let interval: ReturnType<typeof setInterval> | null = null;
-
-    const tick = async () => {
-      await loadJobs();
-      // Stop polling once every job is in a terminal state (no more updates expected)
-      setJobs(prev => {
-        if (prev.length > 0 && prev.every(j => TERMINAL.has(j.status))) {
-          if (interval !== null) { clearInterval(interval); interval = null; }
-        }
-        return prev;
-      });
-    };
-
     loadJobs();
-    interval = setInterval(tick, 15000);
-    return () => { if (interval !== null) clearInterval(interval); };
+    const interval = setInterval(loadJobs, 15000);
+    return () => clearInterval(interval);
   }, [user?.id]);
 
-  // Destroy charts, abort uploads, and close live WS on unmount
+  // Destroy charts and close live WS on unmount to prevent memory leaks
   useEffect(() => {
-    mountedRef.current = true;
     return () => {
-      mountedRef.current = false;
       densityChartRef.current?.destroy();
       anomalyChartRef.current?.destroy();
       if (liveWsRef.current) {
         try { liveWsRef.current.close(); } catch { /* noop */ }
         liveWsRef.current = null;
       }
-      uploadAbortRef.current?.abort();
-      uploadAbortRef.current = null;
     };
   }, []);
 
   const pickFile = (file: File | undefined) => {
     if (!file) return;
-    if (file.size > 500 * 1024 * 1024) {
-      setUploadError('File too large — maximum 500 MB allowed.');
-      return;
-    }
     const err = validateVideoFile(file);
     if (err) {
       setUploadError(err);
@@ -268,8 +244,6 @@ export default function Dashboard() {
       setUploadError('Analysis server is offline. Wait for API ONLINE or try again in a moment.');
       return;
     }
-    const abortCtrl = new AbortController();
-    uploadAbortRef.current = abortCtrl;
     setIsUploading(true);
     setUploadError(null);
 
@@ -280,7 +254,7 @@ export default function Dashboard() {
       }
 
       // Only use the bucket-routed path when the upload actually succeeded.
-      // On any error we silently fall back to direct multipart upload — this
+      // On any error we silently fall back to direct multipart upload â€” this
       // avoids the "Bucket not found / object missing" cascade where the
       // backend later fails to download a path that was never created.
       const bucketOk = !!uploadResult && !uploadResult.error;
@@ -298,12 +272,12 @@ export default function Dashboard() {
           if (/bucket.*not.*found/i.test(uploadResult.error)) {
             setBucketWarning(
               `Storage bucket "${import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'videos'}" not found in Supabase. ` +
-                'Create it in Supabase Dashboard → Storage, or set VITE_SUPABASE_STORAGE_BUCKET to match an existing bucket. ' +
+                'Create it in Supabase Dashboard â†’ Storage, or set VITE_SUPABASE_STORAGE_BUCKET to match an existing bucket. ' +
                 'Falling back to direct upload for now.',
             );
           }
         }
-        res = await submitVideo(selectedFile, undefined, abortCtrl.signal);
+        res = await submitVideo(selectedFile);
       }
 
       addLocalJob(res.job_id, selectedFile.name || res.video_name);
@@ -314,16 +288,20 @@ export default function Dashboard() {
           ...(uploadResult?.publicUrl ? { sourcePublicUrl: uploadResult.publicUrl } : {}),
         }).catch(console.warn);
       }
-      toast.success('Analysis started!', `"${selectedFile.name}" is queued. You'll see live progress now.`);
       clearFile();
+      toast.success(
+        'Analysis queued',
+        `”${selectedFile.name}” is uploading — you'll see live progress now.`,
+        { persist: true, category: 'analysis', actionLabel: 'View progress', actionHref: `/analyze/progress/${res.job_id}` },
+      );
       navigate(`/analyze/progress/${res.job_id}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
       const display = msg.includes('fetch') || msg.includes('network')
         ? 'Network error — check your connection and that the analysis server is online.'
         : msg;
-      setUploadError(display);
       toast.error('Upload failed', display);
+      setUploadError(display);
     } finally {
       setIsUploading(false);
     }
@@ -480,9 +458,9 @@ export default function Dashboard() {
     }
   };
 
-  const connectLiveSocket = async () => {
+  const connectLiveSocket = () => {
     try {
-      const ws = new WebSocket(await getLiveWsUrl());
+      const ws = new WebSocket(getLiveWsUrl());
       liveWsRef.current = ws;
       ws.onmessage = (evt) => {
         try {
@@ -532,12 +510,12 @@ export default function Dashboard() {
     if (!jobId) return;
     const ok = confirm('Delete this analysis job (including report/video outputs)?');
     if (!ok) return;
+    let backendOk = true;
     try {
       await deleteJob(jobId);
-      toast.success('Job deleted', 'Analysis job and all output files removed.');
     } catch (err) {
+      backendOk = false;
       console.warn('Backend job delete failed:', err);
-      toast.warning('Partial delete', 'Job removed from list but some files may remain on server.');
     }
     if (user && isSupabaseConfigured) {
       await deleteVideoUpload(user.id, jobId).catch(() => {});
@@ -545,6 +523,11 @@ export default function Dashboard() {
     if (currentJobId === jobId) setCurrentJobId(null);
     removeLocalJob(jobId);
     await loadJobs();
+    if (backendOk) {
+      toast.success('Job deleted', 'Analysis job and all output files removed.');
+    } else {
+      toast.warning('Partial delete', 'Job removed from list but some files may remain on server.');
+    }
   };
 
   // Safe checks for rendering

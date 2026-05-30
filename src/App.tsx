@@ -1,4 +1,4 @@
-import { Suspense, lazy, type ReactNode, Component, type ErrorInfo } from 'react';
+import { Suspense, lazy, type ReactNode } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import Layout from './components/Layout';
 import Home from './pages/Home';
@@ -16,35 +16,8 @@ import Contact from './pages/Contact';
 import AuthRouteHandler from './pages/AuthRouteHandler';
 import Profile from './pages/Profile';
 import NotFound from './pages/NotFound';
-import UseCases from './pages/UseCases';
-import FAQ from './pages/FAQ';
 import { useAuth } from './contexts/AuthContext';
 import BrandAuthLoader from './components/BrandAuthLoader';
-
-class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  state = { error: null };
-  static getDerivedStateFromError(error: Error) { return { error }; }
-  componentDidCatch(error: Error, info: ErrorInfo) { console.error('[ErrorBoundary]', error, info); }
-  render() {
-    if (this.state.error) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
-          <div className="text-center max-w-md px-6">
-            <h1 className="text-2xl font-bold text-red-400 mb-3">Something went wrong</h1>
-            <p className="text-gray-400 mb-6 text-sm break-words">{(this.state.error as Error).message}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors"
-            >
-              Reload page
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const AnalyzeJob = lazy(() => import('./pages/AnalyzeJob'));
@@ -92,7 +65,6 @@ function LegacyDashboardResultsRedirect() {
 
 function App() {
   return (
-    <ErrorBoundary>
     <Router>
       <Suspense fallback={<BrandAuthLoader />}>
       <Routes>
@@ -109,8 +81,6 @@ function App() {
           <Route path="pricing" element={<Pricing />} />
           <Route path="team" element={<Team />} />
           <Route path="business-case" element={<BusinessCase />} />
-          <Route path="use-cases" element={<UseCases />} />
-          <Route path="faq" element={<FAQ />} />
           <Route path="contact" element={<Contact />} />
           <Route path="signin" element={<AuthRouteHandler mode="signin" />} />
           <Route path="signup" element={<AuthRouteHandler mode="signup" />} />
@@ -154,7 +124,6 @@ function App() {
       </Routes>
       </Suspense>
     </Router>
-    </ErrorBoundary>
   );
 }
 

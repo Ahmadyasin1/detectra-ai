@@ -10,6 +10,12 @@ export type IntegrationSnapshot = {
     modelsLoaded: boolean;
     serverSupabaseSync: boolean;
     onHeroku?: boolean;
+    gpuMode?: boolean;
+    gpuName?: string | null;
+    deployMode?: string;
+    activeModules?: string[];
+    yoloModel?: string;
+    whisperModel?: string;
   };
   auth: {
     configured: boolean;
@@ -48,6 +54,12 @@ export function buildIntegrationSnapshot(
       modelsLoaded,
       serverSupabaseSync,
       onHeroku: health?.on_heroku,
+      gpuMode: health?.gpu_mode,
+      gpuName: health?.gpu_name,
+      deployMode: health?.deploy_mode,
+      activeModules: health?.active_modules,
+      yoloModel: (health as any)?.models?.yolo_seg,
+      whisperModel: (health as any)?.models?.whisper,
     },
     auth: {
       configured: authConfigured,

@@ -19,22 +19,20 @@ import { openAuthModal } from '../lib/openAuth';
 import { NotificationCenter } from './NotificationCenter';
 
 const MAIN_LINKS = [
-  { label: 'Home',         href: '/' },
-  { label: 'Analyzer',    href: '/analyze' },
-  { label: 'Demo',        href: '/demo' },
-  { label: 'Use Cases',   href: '/use-cases' },
+  { label: 'Home', href: '/' },
+  { label: 'Analyzer', href: '/analyze' },
+  { label: 'Demo', href: '/demo' },
   { label: 'Capabilities', href: '/capabilities' },
-  { label: 'Pricing',     href: '/pricing' },
+  { label: 'Pricing', href: '/pricing' },
+  { label: 'Contact', href: '/contact' },
 ] as const;
 
 const MORE_LINKS = [
   { label: 'Business Case', href: '/business-case', icon: Briefcase },
-  { label: 'Architecture',  href: '/architecture',  icon: Network },
-  { label: 'AI Pipeline',   href: '/pipeline',      icon: GitBranch },
-  { label: 'Research',      href: '/research',      icon: BookOpen },
-  { label: 'FAQ',           href: '/faq',           icon: Target },
-  { label: 'Contact',       href: '/contact',       icon: Target },
-  { label: 'FYP Project',   href: '/fyp-project',   icon: Target },
+  { label: 'Architecture', href: '/architecture', icon: Network },
+  { label: 'AI Pipeline', href: '/pipeline', icon: GitBranch },
+  { label: 'Research', href: '/research', icon: BookOpen },
+  { label: 'FYP Project', href: '/fyp-project', icon: Target },
 ] as const;
 
 const MORE_PATHS = MORE_LINKS.map((l) => l.href);
@@ -252,7 +250,7 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Mobile: notification bell + menu button */}
+          {/* Mobile: bell + menu toggle */}
           <div className="lg:hidden flex items-center gap-1">
             <NotificationCenter />
             <button

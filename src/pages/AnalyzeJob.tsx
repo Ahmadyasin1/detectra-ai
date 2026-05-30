@@ -6,9 +6,10 @@ import {
   Video, Cpu, PersonStanding, Mic, Volume2, Brain, Sparkles, ShieldAlert,
   Clock, Zap, TrendingUp, Terminal,
 } from 'lucide-react';
-import { getJobStatus, getJobResult, getWsUrl, cancelJob, retryJob, JobStatus, isValidJobId, getJobErrorMessage } from '../lib/detectraApi';
+import { getJobStatus, getJobResult, getWsUrl, cancelJob, JobStatus, isValidJobId, getJobErrorMessage } from '../lib/detectraApi';
 import { loadJobAnalysisResult } from '../lib/loadJobResult';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotificationStore } from '../contexts/NotificationStore';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { updateVideoUpload } from '../lib/supabaseDb';
 import { persistJobToUserLibrary } from '../lib/jobPersistence';
@@ -95,28 +96,23 @@ const SEG_COLORS: Array<[string, string]> = [
 ];
 
 const STAGE_MAP: Record<string, number> = {
-  queued:             0,
-  initializing:       0,
-  loadingyoloseg:     0,
-  loadingyolopose:    0,
-  modelsready:        0,
-  loadingmodels:      0,
-  readingvideo:       1,
-  startinganalysis:   1,
-  perception:         2,
-  speech:             3,
-  speechaudio:        3,
-  audio:              4,
-  fusion:             5,
-  surveillance:       6,
-  postprocessing:     7,
-  validation:         7,
-  writingoutput:      7,
-  identityreasoning:  7,
-  writingvideo:       8,
-  writingreport:      8,
-  writingragjson:     8,
-  completed:          9,
+  queued:           0,
+  initializing:     0,
+  loadingyoloseg:   0,
+  loadingyolopose:  0,
+  modelsready:      0,
+  loadingmodels:    0,
+  readingvideo:     1,
+  startinganalysis: 1,
+  perception:       2,
+  speech:           3,
+  speechaudio:      3,
+  audio:            4,
+  fusion:           5,
+  surveillance:     6,
+  postprocessing:   7,
+  validation:       7,
+  writingoutput:    7,
 };
 
 function stageIndex(stage: string): number {
@@ -375,17 +371,15 @@ export default function AnalyzeJob() {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate  = useNavigate();
   const { user }  = useAuth();
+  const { addNotification } = useNotificationStore();
 
   const [job, setJob]           = useState<JobStatus | null>(null);
   const [error, setError]       = useState('');
   const [log, setLog]           = useState<LogEntry[]>([]);
   const [elapsed, setElapsed]   = useState(0);
   const [cancelling, setCancelling] = useState(false);
-  const [retrying, setRetrying] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
-  const [showForceOpen, setShowForceOpen] = useState(false);
   const [liveStats, setLiveStats] = useState<{ persons?: number; events?: number; riskLevel?: string }>({});
-  const [queuePosition, setQueuePosition] = useState<number | null>(null);
 
   const wsRef               = useRef<WebSocket | null>(null);
   const wsPingRef           = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -436,6 +430,15 @@ export default function AnalyzeJob() {
       if (user && isSupabaseConfigured) {
         await persistJobToUserLibrary(user.id, jobId, { archiveLabeledVideo: true }).catch(() => {});
       }
+      addNotification({
+        severity:    'success',
+        category:    'analysis',
+        title:       'Analysis complete',
+        message:     `Job ${jobId.slice(0, 8)}… finished. Results are ready.`,
+        jobId,
+        actionLabel: 'View results',
+        actionHref:  `/analyze/results/${jobId}`,
+      });
       window.setTimeout(() => navigate(`/analyze/results/${jobId}`, { replace: true }), 600);
     };
 
@@ -461,55 +464,28 @@ export default function AnalyzeJob() {
       type?: string;
       error?: string | null;
       persons?: number;
-      surveillance_events?: number | unknown[];
+      surveillance_events?: unknown[];
       risk_level?: string;
       video_url?: string;
-      queue_position?: number;
-      message?: string;
     }) => {
-      // ── Heartbeat — ignore silently ──────────────────────────────────────
-      if (raw.type === 'pong') return;
-
-      // ── Queue position broadcast ─────────────────────────────────────────
-      if (raw.type === 'queued') {
-        if (raw.queue_position != null) setQueuePosition(raw.queue_position);
-        if (raw.message) appendLog(raw.message, 'info');
-        return;
-      }
-
-      // ── Live stats — update from any message that carries them ───────────
+      // Update live stats from any WS message that carries them
       if (raw.persons !== undefined) setLiveStats(s => ({ ...s, persons: raw.persons }));
+      if (Array.isArray(raw.surveillance_events)) setLiveStats(s => ({ ...s, events: (raw.surveillance_events as unknown[]).length }));
       if (raw.risk_level) setLiveStats(s => ({ ...s, riskLevel: raw.risk_level }));
-      // surveillance_events is sent as an integer count in completed messages
-      if (raw.surveillance_events != null) {
-        const count = typeof raw.surveillance_events === 'number'
-          ? raw.surveillance_events
-          : Array.isArray(raw.surveillance_events)
-            ? (raw.surveillance_events as unknown[]).length
-            : undefined;
-        if (count !== undefined) setLiveStats(s => ({ ...s, events: count }));
-      }
 
-      // ── Completed ────────────────────────────────────────────────────────
       if (raw.type === 'completed') {
-        setQueuePosition(null);
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { type: _t, queue_position: _qp, message: _msg, ...rest } = raw;
+        const rest = { ...raw };
+        delete (rest as { type?: string }).type;
         onData({
           ...rest,
           status: 'completed', progress: 100, has_result: true, has_report: true,
-          has_video: Boolean(raw.video_url ?? true),
+          has_video: Boolean((raw as { video_url?: string }).video_url ?? true),
           stage: 'completed',
         });
         return;
       }
-
-      // ── Strip WS-only fields before merging into job state ───────────────
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { type: _type, queue_position: _qpos, message: _msg2, video_url: _vu, ...jobFields } = raw;
-
       setJob((prev) => {
-        const merged = mergeJobUpdate(prev, jobFields);
+        const merged = mergeJobUpdate(prev, raw);
         clientProgressRef.current = merged.progress ?? 0;
         const stage    = merged.stage;
         const progress = merged.progress ?? 0;
@@ -520,20 +496,22 @@ export default function AnalyzeJob() {
           highProgressSinceRef.current = null;
         }
 
-        // Only log meaningful stage transitions (skip 'state' hydration noise)
-        if (stage && raw.type !== 'state') {
-          appendLog(`${friendlyStage(stage)} — ${Math.round(progress)}%`);
-        }
+        if (stage) appendLog(`${friendlyStage(stage)} — ${Math.round(progress)}%`);
 
         if (isJobDone(merged)) {
-          setQueuePosition(null);
           queueMicrotask(finishAndRedirect);
         } else if (isJobFailed(merged)) {
-          setQueuePosition(null);
           queueMicrotask(() => {
             stopPolling(); stopWs();
             if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-            appendLog(`Error: ${merged.error || 'Unknown failure'}`, 'error');
+            appendLog(`Error: ${merged.error || 'Unknown failure'}`);
+            addNotification({
+              severity:  'error',
+              category:  'analysis',
+              title:     'Analysis failed',
+              message:   merged.error || `Job ${jobId.slice(0, 8)}… could not complete.`,
+              jobId,
+            });
             if (user && isSupabaseConfigured) {
               updateVideoUpload(user.id, jobId, { status: 'failed' }).catch(() => {});
             }
@@ -563,10 +541,8 @@ export default function AnalyzeJob() {
         }
         if (effective >= 84 && clientProgress >= 84) {
           const since = highProgressSinceRef.current;
-          if (since) {
-            const elapsed = Date.now() - since;
-            if (elapsed >= 12_000 && await tryFinalizeFromApi(d)) return;
-            if (elapsed >= 180_000) setShowForceOpen(true);
+          if (since && Date.now() - since >= 12_000) {
+            if (await tryFinalizeFromApi(d)) return;
           }
         }
 
@@ -588,10 +564,9 @@ export default function AnalyzeJob() {
       wsTimeoutRef.current = setTimeout(() => ws.close(), 45_000);
     };
 
-    const tryWs = async () => {
+    const tryWs = () => {
       try {
-        const url = await getWsUrl(jobId);
-        const ws = new WebSocket(url);
+        const ws = new WebSocket(getWsUrl(jobId));
         wsRef.current = ws;
         ws.onopen = () => {
           setWsConnected(true);
@@ -603,12 +578,7 @@ export default function AnalyzeJob() {
         };
         ws.onmessage = (e) => {
           resetWsTimeout(ws);
-          try {
-            onData(JSON.parse(e.data));
-          } catch (err) {
-            console.warn('[AnalyzeJob] WS parse error:', err);
-            appendLog('WebSocket message could not be parsed — stream may be degraded', 'warning');
-          }
+          try { onData(JSON.parse(e.data)); } catch (err) { console.warn('[AnalyzeJob] WS parse error:', err); }
         };
         ws.onerror  = () => ws.close();
         ws.onclose  = () => {
@@ -629,42 +599,18 @@ export default function AnalyzeJob() {
           return;
         }
       }
-
-      // Retry up to 5 times with 2s back-off for transient server/network errors
-      // (e.g. backend restarting mid-analysis). Don't retry 404 / access errors.
-      const MAX_RETRIES = 5;
-      let lastErr: unknown = null;
-      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        try {
-          const d = await getJobStatus(jobId);
-          const normalized = normalizeJob(d);
-          setJob(normalized ?? d);
-          addLocalJob(jobId, d.video_name);
-          if (normalized && isJobDone(normalized)) { finishAndRedirect(); return; }
-          if (d.status === 'failed') return;
-          startPolling();
-          tryWs();
-          return;  // success
-        } catch (e: unknown) {
-          lastErr = e;
-          const msg = e instanceof Error ? e.message : String(e);
-          // Don't retry 404 / auth / access errors — those are permanent
-          if (
-            msg.includes('404') ||
-            msg.toLowerCase().includes('not found') ||
-            msg.toLowerCase().includes('access') ||
-            msg.includes('403')
-          ) {
-            setError(getJobErrorMessage(e, jobId));
-            return;
-          }
-          if (attempt < MAX_RETRIES - 1) {
-            appendLog(`Server unavailable — retrying in 3s (attempt ${attempt + 1}/${MAX_RETRIES})`, 'warning');
-            await new Promise(r => setTimeout(r, 3000));
-          }
-        }
+      try {
+        const d = await getJobStatus(jobId);
+        const normalized = normalizeJob(d);
+        setJob(normalized ?? d);
+        addLocalJob(jobId, d.video_name);
+        if (normalized && isJobDone(normalized)) { finishAndRedirect(); return; }
+        if (d.status === 'failed') return;
+        startPolling();
+        tryWs();
+      } catch (e: unknown) {
+        setError(getJobErrorMessage(e, jobId));
       }
-      setError(getJobErrorMessage(lastErr, jobId));
     };
 
     void startTracking();
@@ -675,27 +621,9 @@ export default function AnalyzeJob() {
   const displayJob      = job ? normalizeJob(job) ?? job : null;
   const status          = displayJob?.status ?? 'pending';
   const progress        = displayJob?.progress ?? 0;
-
-  // When a job is marked "failed", the stored stage may be "failed" which maps
-  // to index 0 — wrong. Fall back to estimating the last reached stage from
-  // progress so green checkmarks still show for completed stages.
-  const currentStageIdx = (() => {
-    if (status === 'completed') return STAGES.length;
-    if (!displayJob) return -1;
-    const si = stageIndex(displayJob.stage);
-    if (si > 0) return si;
-    if (displayJob.status === 'failed') {
-      const pct = displayJob.progress ?? 0;
-      if (pct >= 88) return 7;
-      if (pct >= 80) return 6;
-      if (pct >= 73) return 5;
-      if (pct >= 58) return 3;
-      if (pct >= 10) return 2;
-      if (pct >= 9)  return 1;
-      return 0;
-    }
-    return si;
-  })();
+  const currentStageIdx =
+    status === 'completed' ? STAGES.length
+    : displayJob ? stageIndex(displayJob.stage) : -1;
   const currentStage    = currentStageIdx >= 0 && currentStageIdx < STAGES.length ? STAGES[currentStageIdx] : null;
   const etaSecs         =
     displayJob && progress > 0 && (status === 'running' || status === 'pending')
@@ -722,19 +650,9 @@ export default function AnalyzeJob() {
           <div className="mb-5 flex items-start gap-3">
             <div className="flex-1">
               <UserBanner variant="info">
-                {queuePosition != null && queuePosition > 1
-                  ? <p>Job is queued at position <strong className="text-white">{queuePosition}</strong> — waiting for an analysis slot. You will be redirected to results automatically when finished.</p>
-                  : <p>Analysis can take several minutes for longer videos. You will be redirected to results automatically when finished.</p>}
+                <p>Analysis can take several minutes for longer videos. You will be redirected to results automatically when finished.</p>
               </UserBanner>
             </div>
-            {jobId && showForceOpen && (
-              <button
-                onClick={() => navigate(`/analyze/results/${jobId}`, { replace: true })}
-                className="flex-shrink-0 mt-0.5 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 hover:bg-amber-500/25 text-xs font-medium transition-colors"
-              >
-                Force open results
-              </button>
-            )}
             {jobId && (
               <button
                 disabled={cancelling}
@@ -760,57 +678,12 @@ export default function AnalyzeJob() {
         )}
 
         {error ? (
-          <div className="text-center py-16 px-4 max-w-lg mx-auto">
-            <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-red-500/10 border border-red-500/25 flex items-center justify-center">
-              <AlertTriangle className="w-10 h-10 text-red-400" />
-            </div>
-            <h2 className="text-white font-bold text-xl mb-2">
-              {error.toLowerCase().includes('not found') || error.includes('404')
-                ? 'Analysis not found'
-                : error.toLowerCase().includes('server') || error.includes('500') || error.toLowerCase().includes('unavailable')
-                  ? 'Server error'
-                  : error.toLowerCase().includes('access') || error.includes('403')
-                    ? 'Access denied'
-                    : 'Something went wrong'}
-            </h2>
-            <p className="text-gray-400 text-sm leading-relaxed mb-6">
-              {error.toLowerCase().includes('internal server error') || error.includes('500')
-                ? 'The analysis server encountered an error. This can happen when the server restarted mid-analysis. Try again below.'
-                : error}
-            </p>
-            <div className="flex flex-wrap gap-3 justify-center">
-              {jobId && !error.includes('404') && !error.toLowerCase().includes('not found') && (
-                <button
-                  type="button"
-                  disabled={retrying}
-                  onClick={async () => {
-                    if (!jobId || retrying) return;
-                    setRetrying(true);
-                    try {
-                      await retryJob(jobId);
-                      setError('');
-                      setLog([]);
-                      setElapsed(0);
-                      setJob(null);
-                    } catch (e) {
-                      setError(e instanceof Error ? e.message : 'Retry failed — please re-upload the video.');
-                    } finally {
-                      setRetrying(false);
-                    }
-                  }}
-                  className="px-5 py-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
-                >
-                  {retrying ? (
-                    <><span className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />Retrying…</>
-                  ) : 'Retry Analysis'}
-                </button>
-              )}
-              <Link to="/analyze">
-                <button type="button" className="px-5 py-2.5 rounded-xl bg-white/6 border border-white/12 text-gray-300 hover:bg-white/10 text-sm font-medium transition-colors">
-                  New Analysis
-                </button>
-              </Link>
-            </div>
+          <div className="text-center py-20">
+            <AlertTriangle className="w-14 h-14 text-red-400 mx-auto mb-4" />
+            <p className="text-red-300 font-medium">{error}</p>
+            <Link to="/analyze">
+              <button className="mt-6 btn-dark text-sm">Back to Analyzer</button>
+            </Link>
           </div>
         ) : !displayJob ? (
           <div className="text-center py-20">
@@ -884,43 +757,35 @@ export default function AnalyzeJob() {
                 {/* Right — Pipeline stage list */}
                 <div className="space-y-1">
                   {STAGES.map((stage, idx) => {
-                    const done       = isDone || idx < currentStageIdx;
-                    const active     = isRunning && idx === currentStageIdx;
-                    const failedHere = isFailed && idx === currentStageIdx;
-                    const pend       = !done && !active && !failedHere;
+                    const done   = isDone || idx < currentStageIdx;
+                    const active = isRunning && idx === currentStageIdx;
+                    const pend   = !done && !active;
                     return (
                       <div
                         key={stage.key}
                         className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-300 ${
-                          active      ? 'bg-white/10 border border-white/15'
-                          : failedHere ? 'bg-red-500/10 border border-red-500/25'
-                          : done       ? 'bg-white/4'
+                          active ? 'bg-white/10 border border-white/15'
+                          : done  ? 'bg-white/4'
                           : 'opacity-45'
                         }`}
                       >
                         {/* Stage icon */}
                         <div
                           className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
-                            done        ? 'bg-green-500/20'
-                            : failedHere ? 'bg-red-500/20'
-                            : active     ? `bg-gradient-to-br ${stage.grad}`
+                            done   ? 'bg-green-500/20'
+                            : active ? `bg-gradient-to-br ${stage.grad}`
                             : 'bg-white/8'
                           }`}
                           style={active ? { boxShadow: `0 0 10px ${stage.glow}` } : {}}
                         >
                           {done
                             ? <CheckCircle className="w-3.5 h-3.5 text-green-400" />
-                            : failedHere
-                              ? <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-                              : <stage.Icon className={`w-3.5 h-3.5 ${active ? 'text-white' : 'text-gray-600'}`} />}
+                            : <stage.Icon className={`w-3.5 h-3.5 ${active ? 'text-white' : 'text-gray-600'}`} />}
                         </div>
 
                         {/* Label */}
                         <span className={`flex-1 text-xs font-medium min-w-0 truncate ${
-                          done        ? 'text-green-400'
-                          : failedHere ? 'text-red-400'
-                          : active     ? 'text-white'
-                          : 'text-gray-600'
+                          done ? 'text-green-400' : active ? 'text-white' : 'text-gray-600'
                         }`}>
                           {stage.label}
                         </span>
@@ -931,9 +796,6 @@ export default function AnalyzeJob() {
                             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
                             <span className="text-cyan-400 text-xs hidden sm:inline">running</span>
                           </span>
-                        )}
-                        {failedHere && (
-                          <span className="text-red-400/70 text-xs flex-shrink-0 hidden sm:inline">failed</span>
                         )}
                         {pend && (
                           <span className="text-gray-700 text-xs tabular-nums flex-shrink-0">{idx + 1}</span>
@@ -1038,80 +900,22 @@ export default function AnalyzeJob() {
             </motion.div>
 
             {/* ── Error detail card ───────────────────────────────────────── */}
-            {isFailed && displayJob && (
+            {isFailed && displayJob.error && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="bg-red-500/8 border border-red-500/25 rounded-2xl p-5"
+                className="bg-red-500/10 border border-red-500/30 rounded-2xl p-5"
               >
-                <p className="text-red-300 font-semibold mb-3 flex items-center gap-2">
+                <p className="text-red-300 font-semibold mb-2 flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4" />
-                  {currentStageIdx >= 7
-                    ? 'Output generation failed — AI analysis completed'
-                    : currentStageIdx >= 5
-                      ? 'Pipeline failed at late stage'
-                      : 'Analysis pipeline failed'}
+                  Error Details
                 </p>
-
-                {displayJob.error ? (
-                  <p className="text-red-400/70 text-sm font-mono break-all bg-black/30 rounded-xl p-3 mb-3">
-                    {displayJob.error}
-                  </p>
-                ) : (
-                  <p className="text-gray-400 text-sm mb-3 leading-relaxed">
-                    {currentStageIdx >= 7
-                      ? 'All AI analysis stages completed successfully. The failure occurred while writing output files (labeled video, HTML report). The core analysis data is intact — retry to regenerate.'
-                      : currentStageIdx >= 5
-                        ? `Failed at the ${STAGES[currentStageIdx]?.label ?? 'post-processing'} stage. This is usually a transient issue — retry below.`
-                        : 'The analysis pipeline did not complete. This may have been caused by a server restart or a resource constraint. Retry below.'}
-                  </p>
-                )}
-
-                {displayJob.progress != null && displayJob.progress > 0 && (
-                  <p className="text-gray-600 text-xs mb-4 font-mono">
-                    Reached {Math.round(displayJob.progress)}% — stage: {STAGES[currentStageIdx]?.label ?? displayJob.stage ?? 'unknown'}
-                  </p>
-                )}
-
-                <div className="flex flex-wrap gap-3">
-                  {jobId && (
-                    <button
-                      type="button"
-                      disabled={retrying}
-                      onClick={async () => {
-                        if (!jobId || retrying) return;
-                        setRetrying(true);
-                        try {
-                          await retryJob(jobId);
-                          setJob(null);
-                          setLog([]);
-                          setElapsed(0);
-                          setError('');
-                        } catch (e) {
-                          setError(
-                            e instanceof Error && e.message.includes('not found')
-                              ? 'Original video no longer available — please re-upload the video to start a new analysis.'
-                              : e instanceof Error ? e.message : 'Retry failed.'
-                          );
-                        } finally {
-                          setRetrying(false);
-                        }
-                      }}
-                      className="px-4 py-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
-                    >
-                      {retrying ? (
-                        <><span className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />Re-running…</>
-                      ) : (
-                        currentStageIdx >= 7 ? 'Regenerate Output' : 'Retry Analysis'
-                      )}
-                    </button>
-                  )}
-                  <Link to="/analyze">
-                    <button type="button" className="px-4 py-2.5 rounded-xl bg-white/6 border border-white/12 text-gray-300 hover:bg-white/10 text-sm font-medium transition-colors">
-                      New Analysis
-                    </button>
-                  </Link>
-                </div>
+                <p className="text-red-400/70 text-sm font-mono break-all bg-black/30 rounded-xl p-3">
+                  {displayJob.error}
+                </p>
+                <Link to="/analyze">
+                  <button className="mt-4 btn-dark text-sm">Return to Analyzer</button>
+                </Link>
               </motion.div>
             )}
 

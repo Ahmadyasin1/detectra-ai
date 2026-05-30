@@ -1,102 +1,69 @@
 import { motion } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
-import { Home, ArrowLeft, Upload, PlayCircle, Search } from 'lucide-react';
-
-const QUICK_LINKS = [
-  { icon: Home,       label: 'Home page',      href: '/',             desc: 'Back to the start' },
-  { icon: Upload,     label: 'Video analyzer', href: '/analyze',      desc: 'Upload and analyse footage' },
-  { icon: PlayCircle, label: 'Live demo',       href: '/demo',         desc: 'See it in action' },
-  { icon: Search,     label: 'Capabilities',   href: '/capabilities', desc: 'What Detectra can do' },
-];
+import { Link } from 'react-router-dom';
+import { Home, ArrowLeft, Upload } from 'lucide-react';
+import { DetectraLogoMark } from '../components/DetectraLogo';
 
 export default function NotFound() {
-  const navigate = useNavigate();
-
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-24 relative">
+    <div className="min-h-[calc(100vh-5rem)] pt-24 flex items-center justify-center px-4 bg-transparent relative">
+
       {/* Background glow */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-cyan-500/5 blur-[120px] rounded-full" />
-      </div>
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_40%,rgba(34,211,238,0.05),transparent_60%)] pointer-events-none" />
 
-      <div className="relative z-10 text-center max-w-lg w-full">
-        {/* Animated 404 */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.85 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, type: 'spring', stiffness: 200 }}
-          className="relative mb-6 select-none"
-          aria-hidden
-        >
-          <span className="block text-[9rem] sm:text-[11rem] font-black leading-none text-white/[0.05]">
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45 }}
+        className="relative text-center max-w-md"
+      >
+        {/* Big 404 */}
+        <div className="relative mb-6">
+          <p className="text-[9rem] font-extrabold leading-none bg-gradient-to-br from-cyan-400/40 to-blue-500/40 bg-clip-text text-transparent select-none">
             404
-          </span>
-          <motion.div
-            className="absolute inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-500/60 to-transparent"
-            style={{ top: '50%' }}
-            animate={{ scaleX: [0, 1, 0], opacity: [0, 1, 0] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut', delay: 0.8 }}
-          />
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-        >
-          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-3">Page not found</h1>
-          <p className="text-gray-400 text-sm sm:text-base leading-relaxed mb-8">
-            This page has been moved or doesn't exist. Try one of these instead:
           </p>
-        </motion.div>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_60%,rgba(34,211,238,0.12),transparent_70%)] blur-2xl pointer-events-none" />
+        </div>
 
-        {/* Quick links grid */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.22 }}
-          className="grid grid-cols-2 gap-3 mb-8"
-        >
-          {QUICK_LINKS.map(({ icon: Icon, label, href, desc }) => (
-            <Link
-              key={href}
-              to={href}
-              className="flex flex-col items-start gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all group"
+        <DetectraLogoMark size="lg" glow className="mx-auto justify-center mb-5" />
+
+        <h1 className="text-2xl font-bold text-white mb-3">Page not found</h1>
+        <p className="text-gray-500 text-sm leading-relaxed mb-8">
+          The page you're looking for doesn't exist or has been moved. Head back to the home page to continue.
+        </p>
+
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link to="/analyze">
+            <motion.div
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex items-center gap-2 px-6 py-3 bg-white/10 border border-white/20 text-gray-200 rounded-xl font-semibold text-sm hover:border-cyan-500/40 transition-all"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-500/10 border border-cyan-500/15 group-hover:border-cyan-500/30 transition-colors">
-                <Icon className="h-4 w-4 text-cyan-400" aria-hidden />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">{label}</p>
-                <p className="text-xs text-gray-500">{desc}</p>
-              </div>
-            </Link>
-          ))}
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.32 }}
-          className="flex flex-col sm:flex-row gap-3 justify-center"
-        >
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-gray-300 hover:bg-white/10 hover:text-white transition min-h-[48px]"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Go back
-          </button>
-          <Link
-            to="/"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-sm font-bold text-white hover:opacity-90 transition min-h-[48px]"
-          >
-            <Home className="h-4 w-4" />
-            Home page
+              <Upload className="w-4 h-4" />
+              Open Analyzer
+            </motion.div>
           </Link>
-        </motion.div>
-      </div>
+          <Link to="/">
+            <motion.div
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl font-semibold text-sm shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 transition-all"
+            >
+              <Home className="w-4 h-4" />
+              Go Home
+            </motion.div>
+          </Link>
+          <button onClick={() => window.history.back()}>
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-2 px-6 py-3 bg-white/10 border border-white/20 text-gray-300 rounded-xl font-semibold text-sm hover:bg-gray-700 hover:text-white hover:border-gray-600 transition-all"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Go Back
+            </motion.div>
+          </button>
+        </div>
+      </motion.div>
     </div>
   );
 }
