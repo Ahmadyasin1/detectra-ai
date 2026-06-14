@@ -4,12 +4,12 @@ import { motion } from 'framer-motion';
 import {
   User, Mail, Calendar, Edit2, Save, X, LogOut, UserCircle,
   Github, LayoutDashboard, CheckCircle, Activity, AlertTriangle,
-  Film, Shield, Clock, ChevronRight, Bell, Send,
+  Film, Shield, Clock, ChevronRight, Bell, Send, Webhook, Link2,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserVideoUploads, videoUrlToJobId, type VideoUpload } from '../lib/supabaseDb';
 import { useToast } from '../contexts/ToastContext';
-import { apiUrl } from '../lib/detectraApi';
+import { apiUrl, testWebhook } from '../lib/detectraApi';
 function loadPref(key: string, def = true) {
   try { const v = localStorage.getItem(key); return v === null ? def : v === '1'; }
   catch { return def; }
@@ -39,6 +39,35 @@ export default function Profile() {
   const [notifyCritical, setNotifyCritical] = useState(() => loadPref('detectra_notify_critical'));
   const [notifyFailed,   setNotifyFailed]   = useState(() => loadPref('detectra_notify_failed'));
   const [testingEmail,   setTestingEmail]   = useState(false);
+
+  // ── Webhook preferences ──────────────────────────────────────────────────────
+  const [webhookUrl,    setWebhookUrl]   = useState(() => {
+    try { return localStorage.getItem('detectra_webhook_url') || ''; } catch { return ''; }
+  });
+  const [webhookSaved,  setWebhookSaved]  = useState(false);
+  const [testingWebhook, setTestingWebhook] = useState(false);
+  const [webhookTestResult, setWebhookTestResult] = useState<'ok' | 'error' | null>(null);
+
+  const saveWebhookUrl = () => {
+    try { localStorage.setItem('detectra_webhook_url', webhookUrl.trim()); }
+    catch { /* quota */ }
+    setWebhookSaved(true);
+    setTimeout(() => setWebhookSaved(false), 2500);
+  };
+
+  const handleTestWebhook = async () => {
+    if (!webhookUrl.trim()) return;
+    setTestingWebhook(true);
+    setWebhookTestResult(null);
+    const result = await testWebhook(webhookUrl.trim());
+    setWebhookTestResult(result.ok ? 'ok' : 'error');
+    if (result.ok) {
+      toast.success('Webhook test sent!', 'Check your endpoint — a test payload was delivered.');
+    } else {
+      toast.error('Webhook failed', result.error ?? 'Endpoint did not respond correctly.');
+    }
+    setTestingWebhook(false);
+  };
 
   const toggle = useCallback((
     setter: React.Dispatch<React.SetStateAction<boolean>>,
@@ -497,6 +526,87 @@ export default function Profile() {
                   ? <><span className="h-3.5 w-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />Sending…</>
                   : <><Send className="h-3.5 w-3.5" />Send test</>}
               </button>
+            </div>
+          </motion.div>
+
+          {/* ── Webhook Notifications ────────────────────────────────────── */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
+            className="card-glass p-6 sm:p-8 mt-6"
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-white font-semibold flex items-center gap-2">
+                <Webhook className="w-4 h-4 text-violet-400" />
+                Webhook Notifications
+              </h2>
+              <span className="text-xs text-gray-500 border border-white/10 rounded-full px-3 py-1">
+                REST callback
+              </span>
+            </div>
+            <p className="text-sm text-gray-400 mb-4 leading-relaxed">
+              POST a JSON payload to your endpoint whenever an analysis job completes or fails.
+              Useful for integrating Detectra AI into your own dashboards, SIEM systems, or alerting pipelines.
+            </p>
+
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
+                  <input
+                    type="url"
+                    value={webhookUrl}
+                    onChange={e => { setWebhookUrl(e.target.value); setWebhookTestResult(null); }}
+                    placeholder="https://your-server.com/webhook"
+                    className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/15 hover:border-white/25 focus:border-violet-500/60 rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none transition-colors"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={saveWebhookUrl}
+                  className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 bg-violet-500/15 text-violet-400 border border-violet-500/30 rounded-xl text-sm font-medium hover:bg-violet-500/25 transition-colors"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  {webhookSaved ? 'Saved!' : 'Save'}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-4 rounded-xl border border-violet-500/15 bg-violet-500/[0.04]">
+                <div>
+                  <p className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Send className="h-4 w-4 text-violet-400" />
+                    Test webhook
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Fires a test payload to verify your endpoint receives Detectra events.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTestWebhook}
+                  disabled={testingWebhook || !webhookUrl.trim()}
+                  className="shrink-0 flex items-center gap-2 px-4 py-2 bg-violet-500/15 text-violet-400 border border-violet-500/30 rounded-xl text-sm font-medium hover:bg-violet-500/25 transition-colors disabled:opacity-40"
+                >
+                  {testingWebhook
+                    ? <><span className="h-3.5 w-3.5 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />Testing…</>
+                    : webhookTestResult === 'ok' ? <><CheckCircle className="h-3.5 w-3.5 text-green-400" />Success!</>
+                    : webhookTestResult === 'error' ? <><AlertTriangle className="h-3.5 w-3.5 text-red-400" />Failed</>
+                    : <><Send className="h-3.5 w-3.5" />Send test</>}
+                </button>
+              </div>
+
+              <div className="rounded-xl border border-white/[0.07] bg-black/20 p-3">
+                <p className="text-xs text-gray-500 font-mono uppercase tracking-wider mb-2">Payload schema</p>
+                <pre className="text-xs text-gray-400 leading-relaxed overflow-x-auto">{`{
+  "event":        "job.completed" | "job.failed",
+  "job_id":       "abc123",
+  "video_name":   "cctv_footage.mp4",
+  "status":       "completed" | "failed",
+  "risk_level":   "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
+  "processing_s": 42.1,
+  "completed_at": "2026-06-14T10:00:00Z",
+  "report_url":   "https://detectra-ai.vercel.app/analyze/results/abc123"
+}`}</pre>
+              </div>
             </div>
           </motion.div>
 

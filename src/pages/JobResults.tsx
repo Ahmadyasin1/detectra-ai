@@ -13,7 +13,7 @@ import {
   riskTextClass, riskBgClass, riskColor,
   severityBadgeClass, severityHex,
   fmtSeconds, fmtDuration,
-  getRagJsonUrl, getReportUrl, getVideoUrl,
+  getRagJsonUrl, getReportUrl, getVideoUrl, getPdfReportUrl, getHeatmapUrl, getExportCsvUrl,
   getTranslatedTranscript,
   distinctPersonCount, trackFragmentCount,
   isValidJobId, getJobErrorMessage,
@@ -458,6 +458,7 @@ const TABS = [
   { key: 'audio',     label: 'Audio',     icon: Volume2  },
   { key: 'objects',   label: 'Objects',   icon: Eye      },
   { key: 'actions',   label: 'Actions',   icon: Target   },
+  { key: 'heatmap',   label: 'Heatmap',  icon: TrendingUp},
   { key: 'report',    label: 'Report',    icon: FileText },
 ] as const;
 
@@ -663,9 +664,17 @@ export default function JobResults() {
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-gray-700 text-gray-400 hover:text-white rounded-xl border border-white/20 text-xs transition-colors">
               <FileJson className="w-3.5 h-3.5" />RAG JSON
             </a>
+            <a href={getExportCsvUrl(jobId)} download={`detectra_export_${jobId}.csv`}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-gray-700 text-gray-400 hover:text-white rounded-xl border border-white/20 text-xs transition-colors">
+              <BarChart3 className="w-3.5 h-3.5" />Export CSV
+            </a>
             <a href={getReportUrl(jobId)} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-gray-700 text-gray-400 hover:text-white rounded-xl border border-white/20 text-xs transition-colors">
-              <Download className="w-3.5 h-3.5" />Report
+              <FileText className="w-3.5 h-3.5" />HTML Report
+            </a>
+            <a href={getPdfReportUrl(jobId)} download={`detectra_report_${jobId}.pdf`}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/15 hover:bg-purple-500/25 text-purple-400 rounded-xl border border-purple-500/30 text-xs transition-colors">
+              <Download className="w-3.5 h-3.5" />PDF Report
             </a>
             <a href={getVideoUrl(jobId)} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 rounded-xl border border-cyan-500/30 text-xs transition-colors">
@@ -1053,6 +1062,41 @@ export default function JobResults() {
                       </div>
                     </>
                   )}
+                </div>
+              )}
+
+              {/* Heatmap */}
+              {tab === 'heatmap' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-gray-500 text-xs uppercase tracking-widest">Person Position Heatmap</p>
+                    <a
+                      href={getHeatmapUrl(jobId)}
+                      download={`detectra_heatmap_${jobId}.png`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 rounded-xl border border-teal-500/20 text-xs transition-colors"
+                    >
+                      <Download className="w-3 h-3" />
+                      Download PNG
+                    </a>
+                  </div>
+                  <div className="rounded-xl overflow-hidden border border-white/10 bg-black/30">
+                    <img
+                      src={getHeatmapUrl(jobId)}
+                      alt="Person position heatmap"
+                      className="w-full h-auto"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                        const parent = (e.target as HTMLImageElement).parentElement;
+                        if (parent) {
+                          parent.innerHTML = '<div class="flex items-center justify-center h-40 text-gray-600 text-sm">Heatmap not available — no person detections or data not ready</div>';
+                        }
+                      }}
+                    />
+                  </div>
+                  <p className="text-gray-700 text-xs text-center">
+                    Aggregated person positions across all frames · hot spots indicate high-occupancy zones
+                  </p>
                 </div>
               )}
 

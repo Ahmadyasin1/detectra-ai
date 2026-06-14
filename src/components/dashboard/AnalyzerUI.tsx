@@ -101,10 +101,17 @@ export function AnalyzerCommandHero({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15, duration: 0.5 }}
           >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-400/90">
-              System snapshot
-            </p>
-            <div className="mt-4 space-y-3">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-400/90">
+                System snapshot
+              </p>
+              {version && (
+                <span className="text-[9px] font-mono border border-white/10 bg-white/[0.04] px-1.5 py-0.5 rounded text-gray-500">
+                  {version}
+                </span>
+              )}
+            </div>
+            <div className="mt-3 space-y-2">
               <HeroMetricRow
                 label="Analysis engine"
                 value={apiOnline ? 'Operational' : 'Offline'}
@@ -112,37 +119,50 @@ export function AnalyzerCommandHero({
               />
               <HeroMetricRow label="Saved analyses" value={String(jobsCount)} tone="cyan" />
               <HeroMetricRow
-                label="AI models"
-                value={modelsReady ? 'Loaded & ready' : 'Warming up...'}
+                label="AI pipeline"
+                value={modelsReady ? 'YOLO + Whisper + PANNs ready' : 'Warming up...'}
                 tone={modelsReady ? 'cyan' : 'warn'}
               />
               {backendStatus ? (
-                <HeroMetricRow label="Backend" value={backendStatus} tone="cyan" />
+                <HeroMetricRow label="Status" value={backendStatus} tone="cyan" />
               ) : null}
-              {version ? <HeroMetricRow label="API version" value={version} tone="cyan" /> : null}
               <HeroMetricRow
-                label="Your account"
+                label="Account"
                 value={accountLinked ? 'Linked · private history' : 'Guest session'}
                 tone={accountLinked ? 'success' : 'warn'}
               />
               <HeroMetricRow
                 label="Cloud sync"
-                value={cloudSync ? 'API ↔ Supabase' : 'Client-only saves'}
+                value={cloudSync ? 'API ↔ Supabase live' : 'Local session only'}
                 tone={cloudSync ? 'success' : 'warn'}
               />
             </div>
-            <motion.div
-              className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10"
-              aria-hidden
-            >
-              <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-500"
-                animate={reduceMotion ? undefined : { width: ['28%', '72%', '48%'] }}
-                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                style={{ width: '55%' }}
-              />
-            </motion.div>
-            <p className="mt-2 text-[10px] text-gray-500">Multimodal fusion active</p>
+            <div className="mt-3 pt-3 border-t border-white/[0.06]">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[9px] text-gray-600 font-mono">MULTIMODAL FUSION</span>
+                <span className="text-[9px] text-cyan-400/70 font-mono">8-stage pipeline</span>
+              </div>
+              <motion.div className="h-1.5 overflow-hidden rounded-full bg-white/10" aria-hidden>
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-500"
+                  animate={reduceMotion ? undefined : { width: ['28%', '78%', '52%'] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ width: '55%' }}
+                />
+              </motion.div>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-1.5 text-center">
+              {[
+                { label: 'Vision', dot: 'bg-cyan-400' },
+                { label: 'Audio', dot: 'bg-sky-400' },
+                { label: 'Fusion', dot: 'bg-blue-400' },
+              ].map(m => (
+                <div key={m.label} className="rounded-lg border border-white/[0.06] bg-white/[0.025] px-2 py-1.5">
+                  <div className={`mx-auto mb-1 h-1.5 w-1.5 rounded-full ${m.dot} shadow-[0_0_6px_currentColor]`} />
+                  <p className="text-[9px] text-gray-500 font-semibold">{m.label}</p>
+                </div>
+              ))}
+            </div>
           </motion.div>
         </div>
       </motion.div>
@@ -229,15 +249,21 @@ export function AnalyzerKpi({
   valueClassName?: string;
   hint?: string;
 }) {
+  const reduceMotion = useReducedMotion();
   return (
-    <div className="analyzer-kpi group">
-      <motion.div className="analyzer-kpi-icon" aria-hidden>
+    <motion.div
+      className="kpi-luxury group"
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+    >
+      <div className="kpi-luxury-icon" aria-hidden>
         <Icon className="h-5 w-5 text-cyan-400/90" />
-      </motion.div>
-      <p className={`analyzer-kpi-value ${valueClassName}`}>{value}</p>
-      <p className="analyzer-kpi-label">{label}</p>
-      {hint && <p className="mt-1 text-[10px] text-gray-600">{hint}</p>}
-    </div>
+      </div>
+      <p className={`kpi-luxury-value ${valueClassName}`}>{value}</p>
+      <p className="kpi-luxury-label">{label}</p>
+      {hint && <p className="kpi-luxury-hint">{hint}</p>}
+    </motion.div>
   );
 }
 

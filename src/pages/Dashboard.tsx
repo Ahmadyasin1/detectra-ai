@@ -6,12 +6,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Cpu, UploadCloud, Film, X, Radio, Play, Video, Shield,
   Users, TrendingUp, Brain, FileText, Download, Bell, Loader2, Square,
-  Sparkles,
+  Sparkles, Zap, Activity, Clock, Target, Search, ChevronRight, BarChart2,
 } from 'lucide-react';
 import Chart from 'chart.js/auto';
 import {
   submitVideo, submitVideoFromUrl, checkHealth, getJobStatus, deleteJob,
   getReportUrl, getVideoUrl, distinctPersonCount, apiUrl, getLiveWsUrl,
+  getExportCsvUrl,
   type JobStatus, type AnalysisResult, type ApiHealth,
 } from '../lib/detectraApi';
 import {
@@ -19,6 +20,7 @@ import {
   AnalyzerKpi,
   AnalyzerSection,
   AnalyzerCollapsible,
+  AnalyzerWorkspaceEmpty,
 } from '../components/dashboard/AnalyzerUI';
 import JobLibraryPanel from '../components/dashboard/JobLibraryPanel';
 import { dedupeJobsByVideo } from '../lib/dedupeJobs';
@@ -47,6 +49,34 @@ interface AlertEntry {
   timestamp: string;
   description: string | undefined;
   isCrit: boolean;
+}
+
+/* ── Risk arc gauge ──────────────────────────────────────────────────────── */
+function RiskGaugeSVG({ risk }: { risk: string }) {
+  const radius = 40;
+  const circ = 2 * Math.PI * radius;
+  const pctMap: Record<string, number> = {
+    STABLE: 0.1, LOW: 0.25, ELEVATED: 0.45, MODERATE: 0.55, HIGH: 0.72, CRITICAL: 0.95,
+  };
+  const colorMap: Record<string, string> = {
+    STABLE: '#22d3ee', LOW: '#34d399', ELEVATED: '#fbbf24', MODERATE: '#fb923c', HIGH: '#f97316', CRITICAL: '#f43f5e',
+  };
+  const pct = pctMap[risk] ?? 0.15;
+  const color = colorMap[risk] ?? '#22d3ee';
+  const arcFill = circ * 0.75 * pct;
+  const arcGap = circ - arcFill;
+  return (
+    <svg viewBox="0 0 100 100" className="w-full h-full risk-gauge-svg" role="img" aria-label={`Risk level: ${risk}`}>
+      <circle cx="50" cy="50" r={radius} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8"
+        strokeDasharray={`${circ * 0.75} ${circ * 0.25}`} strokeLinecap="round" transform="rotate(135 50 50)" />
+      <circle cx="50" cy="50" r={radius} fill="none" stroke={color} strokeWidth="8"
+        strokeDasharray={`${arcFill} ${arcGap}`} strokeLinecap="round" transform="rotate(135 50 50)"
+        style={{ filter: `drop-shadow(0 0 8px ${color}bb)`, transition: 'stroke-dasharray 1.2s ease' }} />
+      <text x="50" y="45" textAnchor="middle" fill={color} fontSize="10" fontWeight="900"
+        fontFamily="ui-monospace,SFMono-Regular,monospace" letterSpacing="-0.5">{risk}</text>
+      <text x="50" y="58" textAnchor="middle" fill="rgba(107,114,128,1)" fontSize="6" fontWeight="600" letterSpacing="1.5">THREAT LEVEL</text>
+    </svg>
+  );
 }
 
 const DashboardStyles = () => (
@@ -135,6 +165,10 @@ export default function Dashboard() {
   
   // Ledger/Alerts
   const [alertsFeed, setAlertsFeed] = useState<AlertEntry[]>([]);
+
+  // UI state
+  const [eventSearch, setEventSearch] = useState('');
+  const [intelTab, setIntelTab] = useState<'events' | 'audio' | 'speech'>('events');
 
   // Refs
   const liveWsRef = useRef<WebSocket | null>(null);
@@ -555,6 +589,23 @@ export default function Dashboard() {
       return (j.video_name || '').toLowerCase().includes(q) || (j.job_id || '').toLowerCase().includes(q);
     });
 
+  const fusionAlertsCount = r ? (r.fusion_insights || []).filter(f => f.anomaly_score > 0.5).length : 0;
+  const avgConfidence = r && eventsCount > 0
+    ? Math.round((r.surveillance_events || []).reduce((acc, e) => acc + e.confidence, 0) / eventsCount * 100)
+    : 0;
+  const currentJob = useMemo(() => displayJobs.find(j => j.job_id === currentJobId), [displayJobs, currentJobId]);
+  const processingTime = (currentJob as any)?.processing_s ? `${Math.round((currentJob as any).processing_s)}s` : '--';
+
+  const filteredEvents = useMemo(() => {
+    const evts = r?.surveillance_events ?? [];
+    if (!eventSearch) return evts;
+    const q = eventSearch.toLowerCase();
+    return evts.filter(e =>
+      e.event_type.toLowerCase().includes(q) ||
+      (e.description || '').toLowerCase().includes(q)
+    );
+  }, [r, eventSearch]);
+
   const triggerFileUpload = () => {
     (document.querySelector('#analyzer-file-input') as HTMLInputElement | null)?.click();
   };
@@ -655,7 +706,7 @@ export default function Dashboard() {
             <AnalyzerSection title="New analysis" icon={UploadCloud}>
               {!selectedFile ? (
                 <label
-                  className={`analyzer-upload-zone ${isDragOver ? 'analyzer-upload-zone--active' : ''}`}
+                  className={`upload-zone-premium ${isDragOver ? 'upload-zone-premium--on' : ''}`}
                   onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
                   onDragLeave={() => setIsDragOver(false)}
                   onDrop={(e) => {
@@ -665,11 +716,17 @@ export default function Dashboard() {
                   }}
                 >
                   <input id="analyzer-file-input" type="file" className="hidden" accept="video/*,.mp4,.mov,.avi,.mkv,.webm" onChange={handleFileSelect} />
-                  <span className="analyzer-upload-icon" aria-hidden>
-                    <Film className="h-6 w-6 text-cyan-400" />
-                  </span>
-                  <span className="text-sm font-semibold text-gray-100">Drop video or browse</span>
-                  <span className="mt-1 text-xs text-gray-500 text-center">MP4, MOV, AVI, MKV  |   max 500 MB</span>
+                  <div className="relative z-10 flex flex-col items-center gap-2">
+                    <div className="w-14 h-14 rounded-2xl border border-cyan-500/25 bg-cyan-500/10 flex items-center justify-center mb-1 shadow-[0_0_24px_rgba(34,211,238,0.15)]">
+                      <Film className="h-6 w-6 text-cyan-400" />
+                    </div>
+                    <span className="text-sm font-bold text-gray-100">Drop video or click to browse</span>
+                    <span className="text-xs text-gray-600 text-center">MP4 · MOV · AVI · MKV · WebM · max 500 MB</span>
+                    <div className="mt-2 flex items-center gap-2 text-[10px] text-gray-600">
+                      <span className="px-2 py-0.5 rounded bg-white/[0.04] border border-white/[0.07]">8-stage AI pipeline</span>
+                      <span className="px-2 py-0.5 rounded bg-white/[0.04] border border-white/[0.07]">Real-time progress</span>
+                    </div>
+                  </div>
                 </label>
               ) : (
                 <motion.div className="space-y-3" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
@@ -693,6 +750,75 @@ export default function Dashboard() {
                 </motion.div>
               )}
             </AnalyzerSection>
+
+            {/* Quick Actions — shown only when a job result is loaded */}
+            {currentJobId && r && (
+              <div className="analyzer-vault p-4 space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/70 mb-3 flex items-center gap-2">
+                  <Zap className="w-3 h-3" /> Quick Actions
+                </p>
+                <Link to={`/analyze/results/${currentJobId}`} className="qa-btn">
+                  <span className="qa-btn-icon"><Brain className="w-3.5 h-3.5 text-cyan-400" /></span>
+                  Full Analysis Report
+                  <ChevronRight className="w-3.5 h-3.5 ml-auto text-gray-600" aria-hidden />
+                </Link>
+                <button type="button" onClick={handleDownloadReport} className="qa-btn">
+                  <span className="qa-btn-icon"><FileText className="w-3.5 h-3.5 text-cyan-400" /></span>
+                  Download PDF Report
+                  <ChevronRight className="w-3.5 h-3.5 ml-auto text-gray-600" aria-hidden />
+                </button>
+                <a href={getExportCsvUrl(currentJobId)} className="qa-btn" download>
+                  <span className="qa-btn-icon"><Download className="w-3.5 h-3.5 text-cyan-400" /></span>
+                  Export CSV Data
+                  <ChevronRight className="w-3.5 h-3.5 ml-auto text-gray-600" aria-hidden />
+                </a>
+                <button type="button" onClick={handleDownloadVideo} className="qa-btn">
+                  <span className="qa-btn-icon"><Video className="w-3.5 h-3.5 text-cyan-400" /></span>
+                  Download Labeled Video
+                  <ChevronRight className="w-3.5 h-3.5 ml-auto text-gray-600" aria-hidden />
+                </button>
+              </div>
+            )}
+
+            {/* System Status & Pipeline Modules */}
+            <div className="analyzer-vault p-4">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/70 mb-3 flex items-center gap-2">
+                <Activity className="w-3 h-3" /> Active Pipeline Modules
+              </p>
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {['YOLOv8', 'ByteTrack', 'Whisper', 'PANNs', 'ViT-B/16', 'CrossAttn', 'MultiAgent'].map(m => (
+                  <span key={m} className="cap-badge">
+                    <span className="cap-badge-dot" />
+                    {m}
+                  </span>
+                ))}
+              </div>
+              <div className="space-y-0">
+                <div className="sys-metric-row">
+                  <span className="text-[10px] text-gray-600">API Status</span>
+                  <div className="flex items-center gap-1.5">
+                    {apiOnline ? <div className="live-dot" /> : <div className="live-dot-offline" />}
+                    <span className={`text-[10px] font-bold ${apiOnline ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {apiOnline ? 'Online' : 'Offline'}
+                    </span>
+                  </div>
+                </div>
+                <div className="sys-metric-row">
+                  <span className="text-[10px] text-gray-600">Active jobs</span>
+                  <span className="text-[10px] font-bold text-cyan-400 font-mono">{runningCount}</span>
+                </div>
+                <div className="sys-metric-row">
+                  <span className="text-[10px] text-gray-600">Total analyses</span>
+                  <span className="text-[10px] font-bold text-cyan-400 font-mono">{displayJobs.length}</span>
+                </div>
+                <div className="sys-metric-row">
+                  <span className="text-[10px] text-gray-600">Models loaded</span>
+                  <span className={`text-[10px] font-bold ${health?.models_loaded ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {health?.models_loaded ? 'Yes' : 'Loading'}
+                  </span>
+                </div>
+              </div>
+            </div>
 
             <AnalyzerCollapsible
               title="Live camera (advanced)"
@@ -727,18 +853,12 @@ export default function Dashboard() {
             <div className="space-y-5">
 
               {!r && !isLive && (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-8 text-center">
-                  <p className="text-sm text-gray-400">
-                    Select a job from the library below or upload a video to see metrics and charts.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={triggerFileUpload}
-                    className="analyzer-btn-primary mt-4 min-h-[44px] px-5"
-                  >
-                    Upload video
-                  </button>
-                </div>
+                <AnalyzerWorkspaceEmpty
+                  onUpload={triggerFileUpload}
+                  onViewCompleted={() => {
+                    document.getElementById('job-library-panel')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                />
               )}
 
               {/* Live Preview Stage */}
@@ -746,115 +866,324 @@ export default function Dashboard() {
                 <div className="relative rounded-3xl border border-white/10 bg-white/5 backdrop-blur-md overflow-hidden shadow-2xl elite-card">
                   <div className="analyzer-scanline"></div>
                   {liveCanvasSrc && <img src={liveCanvasSrc} className="w-full h-auto min-h-[300px] object-contain" alt="SURVEILLANCE FEED" />}
-                  <div className="absolute top-4 left-4 flex gap-3">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-red-600/90 rounded-md shadow-lg animate-pulse">
-                      <span className="w-2 h-2 rounded-full bg-white"></span>
-                      <span className="text-[10px] font-black uppercase text-white tracking-widest">LIVE FEED</span>
+                  <div className="absolute top-4 left-4 flex gap-2">
+                    <div className="live-badge bg-red-600/90 text-white shadow-lg shadow-red-900/40 animate-pulse">
+                      <span className="w-2 h-2 rounded-full bg-white flex-shrink-0" />
+                      REC · LIVE
                     </div>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-md border border-white/10">
-                      <Users className="w-3.5 h-3.5 text-cyan-400" />
-                      <span className="text-xs font-mono font-bold">{livePersons.toString().padStart(2, '0')}</span>
+                    <div className="live-badge bg-black/60 backdrop-blur-md border border-white/15 text-white">
+                      <Users className="w-3 h-3 text-cyan-400" />
+                      <span className="font-mono">{livePersons.toString().padStart(2, '0')} tracked</span>
                     </div>
                   </div>
-                  <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
-                    <div className="space-y-1">
-                      <div className="px-2 py-0.5 bg-cyan-500 text-black inline-block text-[10px] font-black uppercase rounded">{liveAction}</div>
-                      <div className="text-[10px] font-mono text-white/70 drop-shadow-md">CAM_01 // MULTIMODAL_FUSION_ACTIVE</div>
+                  <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
+                    <div className="space-y-1.5">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-cyan-500 text-black rounded-lg text-[10px] font-black uppercase tracking-wider">
+                        <Activity className="w-3 h-3" /> {liveAction}
+                      </div>
+                      <p className="text-[10px] font-mono text-white/60">CAM_01 · MULTIMODAL FUSION ACTIVE</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="audio-vis mb-1">
+                        {[6, 13, 8, 15, 10].map((h, i) => <div key={i} className="audio-bar" style={{ height: `${h}px` }} />)}
+                      </div>
+                      <p className="text-[9px] text-white/40 font-mono">AUDIO</p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                <AnalyzerKpi icon={Users} label="People tracked" value={distinctPeopleCount.toString().padStart(2, '0')} valueClassName="brand-gradient analyzer-mono" />
-                <AnalyzerKpi icon={Bell} label="Security events" value={eventsCount.toString().padStart(2, '0')} valueClassName="text-rose-400 analyzer-mono" />
-                <AnalyzerKpi icon={Shield} label="Risk level" value={risk} valueClassName={`text-base uppercase ${riskClass}`} />
-                <AnalyzerKpi icon={Cpu} label="Audio cues" value={speechCount.toString().padStart(2, '0')} valueClassName="text-sky-400 analyzer-mono" />
-                <AnalyzerKpi icon={Sparkles} label="Analysis" value={r ? 'Ready' : '-'} valueClassName="text-cyan-400 text-sm" hint={r ? 'Metrics loaded' : 'Select a job'} />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <AnalyzerKpi icon={Users} label="People tracked" value={distinctPeopleCount.toString().padStart(2, '0')} valueClassName="brand-gradient analyzer-mono" hint="Unique subjects" />
+                <AnalyzerKpi icon={Bell} label="Security events" value={eventsCount.toString().padStart(2, '0')} valueClassName="text-rose-400 analyzer-mono" hint="All severity levels" />
+                <AnalyzerKpi icon={Shield} label="Risk level" value={risk} valueClassName={`text-base uppercase ${riskClass}`} hint="AI threat assessment" />
+                <AnalyzerKpi icon={Cpu} label="Speech segments" value={speechCount.toString().padStart(2, '0')} valueClassName="text-sky-400 analyzer-mono" hint="Transcribed segments" />
+                <AnalyzerKpi icon={Target} label="Fusion alerts" value={fusionAlertsCount.toString().padStart(2, '0')} valueClassName="text-amber-400 analyzer-mono" hint="Anomaly score > 0.5" />
+                <AnalyzerKpi icon={Activity} label="Avg confidence" value={avgConfidence > 0 ? `${avgConfidence}%` : '--'} valueClassName="text-emerald-400 text-lg" hint="Event confidence mean" />
+                <AnalyzerKpi icon={Clock} label="Processing time" value={processingTime} valueClassName="text-purple-400 text-lg" hint="Total pipeline runtime" />
+                <AnalyzerKpi icon={Sparkles} label="AI analysis" value={r ? 'Ready' : '—'} valueClassName="text-cyan-400 text-sm" hint={r ? '8-stage pipeline done' : 'Select a job'} />
               </div>
 
-              {/* Charts Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="p-6 elite-card rounded-3xl space-y-4">
+              {/* Threat Overview — Risk Gauge + Summary + Distribution */}
+              {r && (
+                <motion.div
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1, duration: 0.4 }}
+                >
+                  {/* Arc gauge */}
+                  <div className="elite-card rounded-3xl p-5 flex flex-col items-center justify-center gap-2">
+                    <div className="w-40 h-40">
+                      <RiskGaugeSVG risk={risk} />
+                    </div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600">Threat Assessment</p>
+                  </div>
+
+                  {/* Analysis Summary */}
+                  <div className="elite-card rounded-3xl p-5">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/70 mb-4">Analysis Summary</p>
+                    <div className="space-y-0.5">
+                      {[
+                        { label: 'Duration',       value: r.duration_s ? `${Math.floor(r.duration_s)}s` : '--' },
+                        { label: 'Resolution',     value: r.height ? `${r.height}p @ ${Math.round(r.fps || 0)} fps` : '--' },
+                        { label: 'Fusion windows', value: String((r.fusion_insights || []).length) },
+                        { label: 'Unique people',  value: String(distinctPeopleCount) },
+                        { label: 'Fusion alerts',  value: String(fusionAlertsCount) },
+                        { label: 'Avg confidence', value: avgConfidence > 0 ? `${avgConfidence}%` : '--' },
+                      ].map(item => (
+                        <div key={item.label} className="sys-metric-row">
+                          <span className="text-[10px] text-gray-600">{item.label}</span>
+                          <span className="text-[10px] font-bold text-cyan-400 font-mono">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Severity Distribution */}
+                  <div className="elite-card rounded-3xl p-5">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/70 mb-4">Event Severity</p>
+                    {(() => {
+                      const evts = r.surveillance_events || [];
+                      const critical = evts.filter(e => e.severity === 'critical').length;
+                      const high = evts.filter(e => e.severity === 'high').length;
+                      const other = evts.length - critical - high;
+                      const total = Math.max(evts.length, 1);
+                      return (
+                        <div className="space-y-3">
+                          {[
+                            { label: 'Critical', count: critical, fill: '#f43f5e', bg: 'rgba(244,63,94,.08)', border: 'rgba(244,63,94,.2)' },
+                            { label: 'High',     count: high,     fill: '#fb923c', bg: 'rgba(251,146,60,.08)', border: 'rgba(251,146,60,.2)' },
+                            { label: 'Other',    count: other,    fill: '#22d3ee', bg: 'rgba(34,211,238,.06)', border: 'rgba(34,211,238,.15)' },
+                          ].map(s => (
+                            <div key={s.label} className="rounded-xl p-3" style={{ background: s.bg, border: `1px solid ${s.border}` }}>
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-[10px] font-semibold text-gray-400">{s.label}</span>
+                                <span className="text-[10px] font-mono font-bold text-gray-300">{s.count}</span>
+                              </div>
+                              <div className="dist-bar-track">
+                                <div className="dist-bar-fill" style={{ width: `${(s.count / total) * 100}%`, background: s.fill, boxShadow: `0 0 8px ${s.fill}88` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Intelligence Brief */}
+              {r && (r as any).ai_brief && (
+                <motion.div
+                  className="intel-brief p-5"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <Brain className="w-4 h-4 text-cyan-400" aria-hidden />
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/80">AI Intelligence Brief</p>
+                    <span className="ml-auto text-[9px] font-mono text-gray-600 border border-white/10 bg-white/[0.03] px-2 py-0.5 rounded">Claude Multiagent</span>
+                  </div>
+                  <p className="text-sm text-gray-300 leading-relaxed line-clamp-4">{(r as any).ai_brief}</p>
+                  {currentJobId && (
+                    <div className="mt-3 pt-3 border-t border-white/[0.06] flex items-center justify-end">
+                      <Link to={`/analyze/results/${currentJobId}`} className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors">
+                        Read full intelligence report <ChevronRight className="w-3 h-3" />
+                      </Link>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+              {/* Analytics Panel */}
+              <div className="elite-card rounded-3xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
                   <h4 className="elite-label flex items-center gap-2">
-                    <TrendingUp className="w-3.5 h-3.5" /> Track density
+                    <BarChart2 className="w-3.5 h-3.5" /> Intelligence Analytics
                   </h4>
-                  <div className="h-48 relative w-full">
-                    <canvas id="density-chart"></canvas>
-                  </div>
+                  <span className="text-[10px] text-gray-600 font-mono">
+                    {r ? `${(r.fusion_insights || []).length} fusion windows · ${(r.frame_analytics || []).length} frames` : 'No data loaded'}
+                  </span>
                 </div>
-                <div className="p-6 elite-card rounded-3xl space-y-4">
-                  <h4 className="elite-label flex items-center gap-2">
-                    <Brain className="w-3.5 h-3.5" /> Anomaly fusion
-                  </h4>
-                  <div className="h-48 relative w-full">
-                    <canvas id="anomaly-chart"></canvas>
+                <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-white/[0.06]">
+                  <div className="p-6 space-y-3">
+                    <h5 className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/70 flex items-center gap-2">
+                      <TrendingUp className="w-3 h-3" /> Track Density Over Time
+                    </h5>
+                    <div className="h-44 relative w-full">
+                      <canvas id="density-chart"></canvas>
+                    </div>
+                  </div>
+                  <div className="p-6 space-y-3">
+                    <h5 className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/70 flex items-center gap-2">
+                      <Brain className="w-3 h-3" /> Anomaly Fusion Score
+                    </h5>
+                    <div className="h-44 relative w-full">
+                      <canvas id="anomaly-chart"></canvas>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Event Ledger */}
-              <div className="elite-card rounded-3xl overflow-hidden border border-white/10">
-                <div className="px-6 py-4 flex items-center justify-between border-b border-white/10">
-                  <h4 className="elite-label">Event ledger</h4>
-                  <span className="px-2 py-0.5 bg-white/10 text-slate-300 text-[10px] rounded-full font-mono">{eventsCount} ENTRIES</span>
+              {/* Intelligence Layers — tabbed: Events | Audio | Speech */}
+              <div className="elite-card rounded-3xl overflow-hidden border border-white/[0.08]">
+                {/* Tab header */}
+                <div className="px-6 py-4 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <h4 className="elite-label flex items-center gap-2">Intelligence Layers</h4>
+                  <div className="flex items-center gap-1 p-1 rounded-xl bg-black/30 border border-white/[0.07] self-start sm:self-auto flex-wrap">
+                    {([
+                      { id: 'events'  as const, label: 'Events',      count: eventsCount },
+                      { id: 'audio'   as const, label: 'Audio',       count: ((r as any)?.audio_events || []).length },
+                      { id: 'speech'  as const, label: 'Speech',      count: speechCount },
+                    ]).map(t => (
+                      <button key={t.id} type="button" onClick={() => setIntelTab(t.id)} className={`intel-tab ${intelTab === t.id ? 'intel-tab--on' : ''}`}>
+                        {t.label}
+                        <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md ${intelTab === t.id ? 'bg-cyan-500/20 text-cyan-400' : 'bg-white/[0.07] text-gray-600'}`}>{t.count}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-separate border-spacing-0 analyzer-table">
-                    <thead>
-                      <tr className="bg-white/5 backdrop-blur-md">
-                        <th className="px-6 py-3 border-b border-white/10 text-slate-500 uppercase font-bold tracking-wider">Timestamp</th>
-                        <th className="px-6 py-3 border-b border-white/10 text-slate-500 uppercase font-bold tracking-wider">Severity</th>
-                        <th className="px-6 py-3 border-b border-white/10 text-slate-500 uppercase font-bold tracking-wider">Classification</th>
-                        <th className="px-6 py-3 border-b border-white/10 text-slate-500 uppercase font-bold tracking-wider">Contextual Description</th>
-                        <th className="px-6 py-3 border-b border-white/10 text-slate-500 uppercase font-bold tracking-wider text-right">Conf %</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#21262d]/50">
-                      {eventsCount === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="py-20 text-center text-slate-500 italic">No anomalies detected or load a completed job.</td>
-                        </tr>
-                      ) : (
-                        (r?.surveillance_events ?? []).map((e, idx) => (
-                          <tr key={idx} className={`transition-colors group ${idx % 2 === 0 ? 'bg-white/[0.02]' : ''} hover:bg-white/5`}>
-                              <td className="px-6 py-4 font-mono text-cyan-400 font-bold">{fmtTime(e.timestamp_s)}</td>
-                              <td className="px-6 py-4">
-                                  <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
-                                    e.severity==='critical'?'bg-rose-500/20 text-rose-500':'bg-orange-500/20 text-orange-400'
-                                  }`}>{e.severity}</span>
-                              </td>
-                              <td className="px-6 py-4 font-bold text-slate-200 capitalize w-max truncate">{e.event_type.replace(/_/g, ' ')}</td>
-                              <td className="px-6 py-4 text-slate-400 group-hover:text-slate-200 transition-colors w-max">{e.description}</td>
-                              <td className="px-6 py-4 text-right font-mono text-slate-500">{Math.round(e.confidence*100)}%</td>
+
+                {/* — Events tab — */}
+                {intelTab === 'events' && (
+                  <>
+                    <div className="px-6 py-3 border-b border-white/[0.05] bg-black/10">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-600 pointer-events-none" aria-hidden />
+                        <input type="text" value={eventSearch} onChange={e => setEventSearch(e.target.value)} placeholder="Filter events by type or description..." className="w-full bg-white/[0.04] border border-white/10 rounded-xl pl-9 pr-8 py-2.5 text-xs text-gray-300 outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20 placeholder:text-gray-600 transition-all" />
+                        {eventSearch && (
+                          <button type="button" onClick={() => setEventSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400 transition-colors" aria-label="Clear filter">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-separate border-spacing-0 analyzer-table">
+                        <thead>
+                          <tr className="bg-white/[0.04] backdrop-blur-md">
+                            {['Time', 'Severity', 'Classification', 'Description', 'Conf'].map((h, i) => (
+                              <th key={h} className={`px-6 py-3 border-b border-white/[0.08] text-slate-500 uppercase font-bold tracking-wider ${i === 4 ? 'text-right' : ''}`}>{h}</th>
+                            ))}
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.04]">
+                          {filteredEvents.length === 0 ? (
+                            <tr><td colSpan={5} className="py-16 text-center text-slate-600 italic">{eventsCount === 0 ? 'No anomalies detected — select a completed job.' : 'No events match your filter.'}</td></tr>
+                          ) : filteredEvents.map((e, idx) => {
+                            const conf = Math.round(e.confidence * 100);
+                            const isCrit = e.severity === 'critical';
+                            const isHigh = e.severity === 'high';
+                            return (
+                              <tr key={idx} className={`transition-colors group ${isCrit ? 'event-row-critical' : isHigh ? 'event-row-high' : idx % 2 === 0 ? 'bg-white/[0.01]' : ''} hover:bg-white/[0.04]`}>
+                                <td className="px-6 py-3 font-mono text-cyan-400 font-bold">{fmtTime(e.timestamp_s)}</td>
+                                <td className="px-6 py-3">
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${isCrit ? 'bg-rose-500/20 text-rose-400' : isHigh ? 'bg-orange-500/20 text-orange-400' : 'bg-yellow-500/15 text-yellow-400'}`}>{e.severity}</span>
+                                </td>
+                                <td className="px-6 py-3 font-semibold text-slate-200 capitalize">{e.event_type.replace(/_/g, ' ')}</td>
+                                <td className="px-6 py-3 text-slate-400 group-hover:text-slate-200 transition-colors max-w-xs truncate">{e.description}</td>
+                                <td className="px-6 py-3 min-w-[80px]">
+                                  <div className="text-right font-mono text-slate-400">{conf}%</div>
+                                  <div className="conf-bar-wrap"><div className="conf-bar-fill" style={{ width: `${conf}%`, background: conf > 80 ? 'rgba(244,63,94,.65)' : conf > 60 ? 'rgba(251,146,60,.55)' : 'rgba(34,211,238,.45)' }} /></div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+
+                {/* — Audio Events tab — */}
+                {intelTab === 'audio' && (
+                  <div className="p-6 space-y-2 max-h-80 overflow-y-auto analyzer-scroll">
+                    {((r as any)?.audio_events || []).length === 0 ? (
+                      <p className="text-center text-slate-600 italic text-xs py-12">No audio events detected in this analysis.</p>
+                    ) : (
+                      ((r as any).audio_events as Array<{ label?: string; event_label?: string; confidence: number; timestamp_s?: number; onset?: number }>).map((a, i) => (
+                        <div key={i} className="audio-event-row">
+                          <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 flex-shrink-0">
+                            <div className="audio-vis">
+                              {[6, 13, 8, 15, 10].map((h, j) => <div key={j} className="audio-bar" style={{ height: `${h}px` }} />)}
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-200 capitalize">{(a.label || a.event_label || 'Audio event').replace(/_/g, ' ')}</p>
+                            <p className="text-[10px] text-gray-600 font-mono mt-0.5">{a.timestamp_s != null ? fmtTime(a.timestamp_s) : a.onset != null ? fmtTime(a.onset) : '--'}</p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className="text-xs font-mono text-sky-400">{Math.round(a.confidence * 100)}%</div>
+                            <div className="conf-bar-wrap w-16 mt-1"><div className="conf-bar-fill" style={{ width: `${Math.round(a.confidence * 100)}%`, background: 'rgba(56,189,248,.6)' }} /></div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* — Speech Transcript tab — */}
+                {intelTab === 'speech' && (
+                  <div className="p-5 space-y-2 max-h-96 overflow-y-auto analyzer-scroll">
+                    {(r?.speech_segments || []).filter(s => !s.is_noise).length === 0 ? (
+                      <p className="text-center text-slate-600 italic text-xs py-12">No speech detected in this analysis.</p>
+                    ) : (
+                      (r?.speech_segments || []).filter(s => !s.is_noise).map((seg, i) => (
+                        <div key={i} className="transcript-line">
+                          <div className="flex items-center gap-3 mb-1.5 flex-wrap">
+                            <span className="font-mono text-[10px] text-cyan-400/80 font-bold shrink-0">
+                              {fmtTime((seg as any).start ?? 0)} → {fmtTime((seg as any).end ?? 0)}
+                            </span>
+                            {(seg as any).speaker && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-semibold">{(seg as any).speaker}</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-300 leading-relaxed">{(seg as any).text || '[inaudible]'}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
             {r && (
-              <motion.div layout className="elite-card p-5 sm:p-6 flex flex-col lg:flex-row lg:items-end justify-between gap-4 border-cyan-500/20">
-                <div className="min-w-0">
-                  <h2 className="text-xl sm:text-2xl font-bold truncate text-white">{r.video_name}</h2>
-                  <p className="text-gray-400 text-sm mt-1">
-                    {Math.floor(r.duration_s || 0)}s  |   {r.height}p @ {Math.round(r.fps)}fps  |   {eventsCount} events
-                  </p>
+              <motion.div
+                layout
+                className="elite-card overflow-hidden border border-cyan-500/15"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                {/* Video info strip */}
+                <div className="px-5 py-3 border-b border-white/[0.06] flex items-center gap-3 bg-cyan-500/[0.03]">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center flex-shrink-0">
+                    <Video className="w-4 h-4 text-cyan-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-sm font-bold truncate text-white">{r.video_name}</h2>
+                    <p className="text-[11px] text-gray-500 mt-0.5 font-mono">
+                      {Math.floor(r.duration_s || 0)}s · {r.height}p @ {Math.round(r.fps || 0)} fps · {eventsCount} events · {distinctPeopleCount} people
+                    </p>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${
+                    risk === 'CRITICAL' ? 'bg-rose-500/15 border-rose-500/30 text-rose-400' :
+                    risk === 'HIGH'     ? 'bg-orange-500/15 border-orange-500/30 text-orange-400' :
+                                         'bg-cyan-500/12 border-cyan-500/25 text-cyan-400'
+                  }`}>{risk}</span>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 shrink-0">
-                  <Link
-                    to={`/analyze/results/${currentJobId}`}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/35 font-semibold text-sm transition-all min-h-[44px]"
-                  >
-                    <Brain className="w-4 h-4" /> Full analysis
+                {/* Actions */}
+                <div className="p-4 flex flex-wrap gap-2">
+                  <Link to={`/analyze/results/${currentJobId}`} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-500/12 hover:bg-cyan-500/22 text-cyan-300 border border-cyan-500/30 font-semibold text-xs transition-all min-h-[40px]">
+                    <Brain className="w-3.5 h-3.5" /> Full Intelligence Report
                   </Link>
-                  <button type="button" onClick={handleDownloadReport} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-gray-200 border border-white/20 font-semibold text-sm transition-all min-h-[44px]">
-                    <FileText className="w-4 h-4" /> Export report
+                  <button type="button" onClick={handleDownloadReport} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-gray-200 border border-white/15 font-semibold text-xs transition-all min-h-[40px]">
+                    <FileText className="w-3.5 h-3.5" /> PDF Report
                   </button>
-                  <button type="button" onClick={handleDownloadVideo} className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl brand-bg-gradient text-slate-900 font-bold text-sm transition-all shadow-lg shadow-cyan-500/20 min-h-[44px]">
-                    <Download className="w-4 h-4" /> Download video
+                  <a href={getExportCsvUrl(currentJobId!)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-gray-200 border border-white/15 font-semibold text-xs transition-all min-h-[40px]" download>
+                    <Download className="w-3.5 h-3.5" /> CSV Data
+                  </a>
+                  <button type="button" onClick={handleDownloadVideo} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl brand-bg-gradient text-slate-900 font-bold text-xs transition-all shadow-lg shadow-cyan-500/15 min-h-[40px] ml-auto">
+                    <Download className="w-3.5 h-3.5" /> Labeled Video
                   </button>
                 </div>
               </motion.div>
@@ -862,19 +1191,22 @@ export default function Dashboard() {
 
               {alertsFeed.length > 0 && (
                 <AnalyzerSection title="Live insights" icon={Bell}>
-                  <div className="max-h-48 space-y-2 overflow-y-auto analyzer-scroll">
+                  <div className="max-h-64 space-y-2 overflow-y-auto analyzer-scroll pr-1">
                     {alertsFeed.map((e) => (
                       <div
                         key={e.id}
-                        className={`analyzer-insight-card ${e.isCrit ? 'analyzer-insight-card--critical' : 'analyzer-insight-card--warn'}`}
+                        className={`analyzer-insight-card alert-new ${e.isCrit ? 'analyzer-insight-card--critical' : 'analyzer-insight-card--warn'}`}
                       >
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className={`text-[10px] font-bold uppercase ${e.isCrit ? 'text-rose-400' : 'text-amber-400'}`}>
-                            {e.event_type.replace(/_/g, ' ')}
-                          </span>
-                          <span className="analyzer-mono text-[10px] text-gray-600">{e.timestamp}</span>
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${e.isCrit ? 'bg-rose-400' : 'bg-amber-400'} shadow-[0_0_6px_currentColor]`} aria-hidden />
+                            <span className={`text-[10px] font-bold uppercase tracking-wide ${e.isCrit ? 'text-rose-400' : 'text-amber-400'}`}>
+                              {e.event_type.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                          <span className="analyzer-mono text-[10px] text-gray-600 shrink-0">{e.timestamp}</span>
                         </div>
-                        <p className="text-xs leading-relaxed text-gray-300">{e.description}</p>
+                        <p className="text-xs leading-relaxed text-gray-300 pl-3.5">{e.description}</p>
                       </div>
                     ))}
                   </div>
@@ -884,21 +1216,23 @@ export default function Dashboard() {
           </section>
           </div>
 
-          <JobLibraryPanel
-            jobs={displayJobs}
-            filteredJobs={filteredJobs}
-            uploadsByJob={uploadsByJob}
-            jobQuery={jobQuery}
-            onJobQueryChange={setJobQuery}
-            jobFilter={jobFilter}
-            onJobFilterChange={setJobFilter}
-            currentJobId={currentJobId}
-            runningCount={runningCount}
-            onRefresh={loadJobs}
-            onOpen={handleOpenJob}
-            onPreview={loadJobData}
-            onDelete={handleDeleteJob}
-          />
+          <div id="job-library-panel">
+            <JobLibraryPanel
+              jobs={displayJobs}
+              filteredJobs={filteredJobs}
+              uploadsByJob={uploadsByJob}
+              jobQuery={jobQuery}
+              onJobQueryChange={setJobQuery}
+              jobFilter={jobFilter}
+              onJobFilterChange={setJobFilter}
+              currentJobId={currentJobId}
+              runningCount={runningCount}
+              onRefresh={loadJobs}
+              onOpen={handleOpenJob}
+              onPreview={loadJobData}
+              onDelete={handleDeleteJob}
+            />
+          </div>
 
         </div>
       </motion.div>

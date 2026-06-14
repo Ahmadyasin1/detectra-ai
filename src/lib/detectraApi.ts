@@ -199,6 +199,15 @@ export interface ApiStats {
   failed: number;
   critical_alerts: number;
   uptime_s: number;
+  // v7.4 enhanced stats
+  risk_breakdown?: Record<string, number>;
+  total_events_detected?: number;
+  avg_processing_s?: number;
+  smtp_configured?: boolean;
+  webhook_configured?: boolean;
+  multiagent_enabled?: boolean;
+  queue_length?: number;
+  max_concurrent?: number;
 }
 
 export interface TranscriptTranslationResponse {
@@ -848,6 +857,25 @@ export function distinctPersonCount(result: Pick<AnalysisResult, 'distinct_indiv
 /** Raw ByteTrack IDs accumulated over the video (often >> distinct people). */
 export function trackFragmentCount(result: Pick<AnalysisResult, 'unique_track_ids'>): number {
   return (result.unique_track_ids ?? []).length;
+}
+
+export function getHeatmapUrl(jobId: string): string {
+  return apiUrl(`/api/jobs/${jobId}/heatmap`);
+}
+
+export function getExportCsvUrl(jobId: string): string {
+  return apiUrl(`/api/jobs/${jobId}/export.csv`);
+}
+
+export async function testWebhook(webhookUrl: string, jobId?: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    return await fetchWithRetry<{ ok: boolean; error?: string }>('/api/webhook/test', {
+      method: 'POST',
+      body: JSON.stringify({ url: webhookUrl, job_id: jobId }),
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 export function anomalyColor(score: number): string {
