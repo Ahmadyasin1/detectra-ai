@@ -234,6 +234,12 @@ const CONFIGURED_API = (
   (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/$/, '') || ''
 );
 
+function shouldUseSameOriginApi(): boolean {
+  if (import.meta.env.VITE_API_SAME_ORIGIN === 'true') return true;
+  if (typeof window === 'undefined') return false;
+  return window.location.hostname.endsWith('.vercel.app');
+}
+
 /**
  * HTTP base URL for REST calls.
  * - Dev: '' → Vite proxies /api and /health to VITE_API_URL (see vite.config.ts).
@@ -243,6 +249,7 @@ const CONFIGURED_API = (
 export const API_URL: string = (() => {
   if (import.meta.env.VITE_API_DIRECT === 'true') return CONFIGURED_API;
   if (import.meta.env.DEV) return '';
+  if (shouldUseSameOriginApi()) return '';
   return CONFIGURED_API;  // empty = relative paths → Vercel rewrites handle routing
 })();
 

@@ -3,7 +3,7 @@
  * Links Detectra AI ↔ Nexariza AI ↔ Ahmad Yasin for search discovery.
  */
 
-export const SEO_API_ORIGIN = 'https://detectra-ai-e00ebf89f84f.herokuapp.com';
+export const SEO_API_ORIGIN = 'http://20.2.92.40:8000';
 
 export const NEXARIZA_ORG = {
   name: 'Nexariza AI',

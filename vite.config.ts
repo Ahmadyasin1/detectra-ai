@@ -21,9 +21,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const deployBuildId = readDeployBuildId();
 
-  // Backend API — Heroku by default; override with VITE_API_URL for local API
+  // Backend API — defaults to the live backend for local dev/preview unless overridden.
   const apiTarget =
-    env.VITE_API_URL || 'https://detectra-ai-e00ebf89f84f.herokuapp.com';
+    env.VITE_API_URL || 'http://20.2.92.40:8000';
   const wsTarget  = apiTarget.replace(/^https?/, 'ws');
 
   return {
